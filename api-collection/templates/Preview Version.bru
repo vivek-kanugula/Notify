@@ -1,0 +1,29 @@
+meta {
+ name: Preview Version
+ type: http
+ seq: 12
+}
+
+post {
+ url: {{baseUrl}}/api/v1/templates/{{templateId}}/versions/1/preview
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "variables": {
+ "orderId": "ORD-12345",
+ "customerName": "Alice & Bob",
+ "amount": "$49.99"
+ }
+ }
+}

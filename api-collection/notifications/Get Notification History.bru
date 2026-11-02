@@ -1,0 +1,14 @@
+meta {
+ name: Get Notification History
+ type: http
+ seq: 4
+}
+
+get {
+ url: {{baseUrl}}/api/v1/notifications/{{notificationId}}/history
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}

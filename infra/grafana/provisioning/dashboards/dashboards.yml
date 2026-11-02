@@ -1,0 +1,13 @@
+# / load provisioned dashboards from disk.
+apiVersion: 1
+
+providers:
+  - name: notify
+    orgId: 1
+    folder: Notify
+    type: file
+    disableDeletion: false
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

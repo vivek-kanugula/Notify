@@ -1,0 +1,242 @@
+# Release packaging, GHCR publishing, and CVE scanning.
+#
+# Trigger: tag push matching v* (e.g. v1.0.0-rc1).
+# Runs the full cumulative gate, builds multi-arch Docker images, pushes to GHCR,
+# and scans for CVEs with Trivy and OWASP Dependency-Check.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/notify-core
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/notify-web
+
+jobs:
+  # ──────────────────────────────────────────
+  # 1. Cumulative Gate (same checks as gate.yml)
+  # ──────────────────────────────────────────
+  gate:
+    name: Cumulative gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Backend tests
+        working-directory: backend
+        run: |
+          chmod +x ./mvnw
+          ./mvnw --batch-mode test
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Docker Compose config check (dev)
+        run: docker compose -f infra/docker-compose.yml --profile core --profile app --profile obs config > /dev/null
+
+      - name: Docker Compose config check (prod)
+        env:
+          DOMAIN: ci.example.com
+          POSTGRES_PASSWORD: ci_placeholder
+          REDIS_PASSWORD: ci_placeholder
+          NOTIFY_JWT_SECRET: ci_placeholder_min_32_chars_long_value
+          NOTIFY_ADMIN_EMAIL: ci@example.com
+          NOTIFY_ADMIN_PASSWORD: ci_placeholder_10
+          GF_ADMIN_PASSWORD: ci_placeholder
+        run: docker compose -f infra/docker-compose.prod.yml --profile obs config > /dev/null
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ──────────────────────────────────────────
+  # 2. Security Scanning & Dependency Audit
+  # ──────────────────────────────────────────
+  security-scan:
+    name: Security scan & CVE audit
+    runs-on: ubuntu-latest
+    needs: gate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: OWASP Dependency-Check (D-8)
+        working-directory: backend
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          chmod +x ./mvnw
+          if [ -n "$NVD_API_KEY" ]; then
+            ./mvnw --batch-mode org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=9 -DsuppressionFile=dependency-check-suppressions.xml -DnvdApiKey="$NVD_API_KEY"
+          else
+            echo "NVD_API_KEY not configured; running in offline mode..."
+            ./mvnw --batch-mode org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=9 -DsuppressionFile=dependency-check-suppressions.xml -DautoUpdate=false || true
+          fi
+
+      - name: Upload dependency-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: backend/target/dependency-check-report.*
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Build local images for container scanning
+        run: |
+          docker build -t notify-backend:scan -f infra/Dockerfile.backend backend
+          docker build -t notify-frontend:scan -f infra/Dockerfile.frontend frontend
+
+      - name: Trivy scan — backend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: notify-backend:scan
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Trivy scan — frontend
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: notify-frontend:scan
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Upload Trivy SARIF — backend
+        if: always() && hashFiles('trivy-backend.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload Trivy SARIF — frontend
+        if: always() && hashFiles('trivy-frontend.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+  # ──────────────────────────────────────────
+  # 3. Build & Publish Multi-Arch Docker Images
+  # ──────────────────────────────────────────
+  build-and-push:
+    name: Build & publish images
+    runs-on: ubuntu-latest
+    needs: [gate, security-scan]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push backend
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: infra/Dockerfile.backend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: infra/Dockerfile.frontend
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+

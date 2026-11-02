@@ -1,0 +1,15 @@
+meta {
+ name: List Template Versions
+ type: http
+ seq: 8
+}
+
+get {
+ url: {{baseUrl}}/api/v1/templates/{{templateId}}/versions
+ body: none
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}

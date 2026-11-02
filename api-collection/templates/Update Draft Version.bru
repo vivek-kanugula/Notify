@@ -1,0 +1,27 @@
+meta {
+ name: Update Draft Version
+ type: http
+ seq: 10
+}
+
+put {
+ url: {{baseUrl}}/api/v1/templates/{{templateId}}/versions/1
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "subject": "Updated Subject for \u007B\u007BorderId\u007D\u007D",
+ "body": "Updated body content with \u007B\u007BcustomerName\u007D\u007D and \u007B\u007BorderId\u007D\u007D.",
+ "contentType": "TEXT"
+ }
+}

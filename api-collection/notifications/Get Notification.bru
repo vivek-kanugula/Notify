@@ -1,0 +1,14 @@
+meta {
+ name: Get Notification
+ type: http
+ seq: 2
+}
+
+get {
+ url: {{baseUrl}}/api/v1/notifications/{{notificationId}}
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}

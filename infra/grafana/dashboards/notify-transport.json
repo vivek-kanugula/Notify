@@ -1,0 +1,49 @@
+{
+  "uid": "notify-transport",
+  "title": "Notify Transport",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Outbox pending backlog",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_pending" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Oldest pending outbox age (s)",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_oldest_age_seconds" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "DLQ open",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_dlq_open" }
+      ]
+    }
+  ]
+}

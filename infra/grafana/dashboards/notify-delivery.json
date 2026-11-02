@@ -1,0 +1,49 @@
+{
+  "uid": "notify-delivery",
+  "title": "Notify Delivery",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Delivery attempts by result",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (channel, result_status) (rate(notify_delivery_attempts_total[5m]))", "legendFormat": "{{channel}} {{result_status}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Provider latency p95 (s)",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(notify_delivery_duration_seconds_bucket[5m])))", "legendFormat": "{{channel}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Circuit breaker state",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_resilience_circuitbreaker_state", "legendFormat": "{{name}}" }
+      ]
+    }
+  ]
+}

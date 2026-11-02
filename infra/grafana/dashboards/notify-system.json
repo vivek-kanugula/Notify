@@ -1,0 +1,49 @@
+{
+  "uid": "notify-system",
+  "title": "Notify System",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "JVM heap used",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Hikari active connections",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "hikaricp_connections_active" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Rate-limit throttled",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (type) (rate(notify_ratelimit_throttled_total[5m]))", "legendFormat": "{{type}}" }
+      ]
+    }
+  ]
+}

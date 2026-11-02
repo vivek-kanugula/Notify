@@ -1,0 +1,25 @@
+meta {
+ name: Cancel Notification
+ type: http
+ seq: 5
+}
+
+post {
+ url: {{baseUrl}}/api/v1/notifications/{{notificationId}}/cancel
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "reason": "Order cancelled by user"
+ }
+}

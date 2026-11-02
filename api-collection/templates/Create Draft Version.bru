@@ -1,0 +1,27 @@
+meta {
+ name: Create Draft Version
+ type: http
+ seq: 6
+}
+
+post {
+ url: {{baseUrl}}/api/v1/templates/{{templateId}}/versions
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "subject": "Order #\u007B\u007BorderId\u007D\u007D - Dispatch Notice",
+ "body": "Your order #\u007B\u007BorderId\u007D\u007D has shipped with courier \u007B\u007Bcourier\u007D\u007D.",
+ "contentType": "TEXT"
+ }
+}

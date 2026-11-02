@@ -1,0 +1,22 @@
+// / ships container stdout to Loki. The backend already logs structured ECS JSON to stdout
+// (notify.logging structured format), so no parsing stage is needed here - Loki stores the JSON line and
+// Grafana's derived field extracts trace.id from it.
+logging {
+  level = "info"
+}
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.containers.targets
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

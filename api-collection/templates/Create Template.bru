@@ -1,0 +1,30 @@
+meta {
+ name: Create Template
+ type: http
+ seq: 1
+}
+
+post {
+ url: {{baseUrl}}/api/v1/templates
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "name": "Order Confirmation",
+ "channel": "EMAIL",
+ "description": "Sent when an order is placed",
+ "subject": "Order #\u007B\u007BorderId\u007D\u007D Confirmed",
+ "body": "Hello \u007B\u007BcustomerName\u007D\u007D, your order #\u007B\u007BorderId\u007D\u007D is confirmed! Total: \u007B\u007Bamount\u007D\u007D.",
+ "contentType": "TEXT"
+ }
+}

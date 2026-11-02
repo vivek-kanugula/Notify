@@ -1,0 +1,59 @@
+# On-demand live email verification.
+#
+# Manual only (workflow_dispatch). This workflow PERFORMS A REAL OUTBOUND SEND through the configured
+# Resend account, so it is never attached to push or pull_request and never runs as part of the gate.
+#
+# Required repository secret:
+#   RESEND_API_KEY  -> exposed to the build as NOTIFY_RESEND_API_KEY
+#
+# Without that secret the suite skips itself via JUnit Assumptions and the job still succeeds, so a fork
+# or a misconfigured repo reports "skipped", never a false failure.
+name: email-e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      recipient:
+        description: "Recipient address (default delivered@resend.dev, Resend's always-delivered test inbox)"
+        required: false
+        default: "delivered@resend.dev"
+      sender:
+        description: "Verified sender (default onboarding@resend.dev, Resend's shared test sender)"
+        required: false
+        default: "onboarding@resend.dev"
+
+jobs:
+  live-email:
+    name: Live Resend send
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Run live-email suite
+        working-directory: backend
+        env:
+          NOTIFY_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_LIVE_EMAIL_TO: ${{ inputs.recipient }}
+          NOTIFY_LIVE_EMAIL_FROM: ${{ inputs.sender }}
+        run: |
+          chmod +x ./mvnw
+          ./mvnw --batch-mode -Plive-email test
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-email-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 7

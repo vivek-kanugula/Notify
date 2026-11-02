@@ -1,0 +1,49 @@
+{
+  "uid": "notify-overview",
+  "title": "Notify Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Notifications created (rate)",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (channel) (rate(notify_notifications_created_total[5m]))", "legendFormat": "{{channel}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Delivery success rate (5m)",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum(rate(notify_delivery_attempts_total{result_status=\"SUCCESS\"}[5m])) / clamp_min(sum(rate(notify_delivery_attempts_total[5m])), 1)" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Queue depth",
+      "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "options": {},
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (status) (notify_queue_depth)", "legendFormat": "{{status}}" }
+      ]
+    }
+  ]
+}

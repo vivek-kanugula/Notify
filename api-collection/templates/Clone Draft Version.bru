@@ -1,0 +1,26 @@
+meta {
+ name: Clone Draft Version
+ type: http
+ seq: 7
+}
+
+post {
+ url: {{baseUrl}}/api/v1/templates/{{templateId}}/versions
+ body: json
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
+
+headers {
+ Content-Type: application/json
+}
+
+body:json {
+ {
+ "cloneFromVersion": 1,
+ "subject": "Cloned Subject with \u007B\u007BorderId\u007D\u007D"
+ }
+}

@@ -1,0 +1,51 @@
+groups:
+  - name: notify-platform-alerts
+    rules:
+      - record: notify_notifications_created_total
+        expr: notify_notifications_total
+
+      - alert: OutboxBacklogHigh
+        expr: notify_outbox_pending > 500
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transactional Outbox backlog exceeds 500 records"
+          description: "Outbox pending gauge has exceeded 500 for over 2 minutes (current value: {{ $value }}). Relay worker may be stalled or lagging."
+
+      - alert: HikariPoolExhausted
+        expr: hikaricp_connections_pending > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HikariCP database connection pool exhausted"
+          description: "More than 5 threads are pending connection acquisition for over 1 minute. Database connection pool is saturated."
+
+      - alert: HighDeliveryFailureRate
+        expr: (sum(rate(notify_delivery_attempts_total{result_status="FAILURE"}[5m])) / clamp_min(sum(rate(notify_delivery_attempts_total[5m])), 1)) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Delivery failure rate exceeded 5%"
+          description: "Outbound provider failure rate is higher than 5% over a 5-minute rolling window."
+
+      - alert: RateLimitThrottledHigh
+        expr: sum by (type) (rate(notify_ratelimit_throttled_total[5m])) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiting throttled requests spike"
+          description: "High volume of rate limited requests (current rate: {{ $value }}/s)."
+
+      - alert: CircuitBreakerOpen
+        expr: notify_resilience_circuitbreaker_state > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Resilience4j Circuit Breaker is open"
+          description: "Provider circuit breaker transitioned to OPEN (1) or HALF_OPEN (2)."
+

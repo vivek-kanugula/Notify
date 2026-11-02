@@ -1,0 +1,15 @@
+meta {
+ name: List Templates
+ type: http
+ seq: 2
+}
+
+get {
+ url: {{baseUrl}}/api/v1/templates
+ body: none
+ auth: bearer
+}
+
+auth:bearer {
+ token: {{token}}
+}
