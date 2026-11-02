@@ -1,0 +1,28 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+# / sample every trace locally for debugging (production stays at 10%).
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+
+notify:
+  outbox:
+    # High-throughput local polling (100ms vs 500ms default) for near-instant relay to Kafka
+    relay-interval-ms: 100
+  demo:
+    public: true
+    tenant-slugs: acme,globex
+    # a new tenant's default webhook endpoint points at this local demo receiver. Set in this profile only,
+    # so the production and test signup paths provision nothing. The prod profile refuses it at startup.
+    webhook-url: ${NOTIFY_DEMO_WEBHOOK_URL:http://localhost:8080/demo/webhook-receiver}
+  webhook:
+    # the demo/local destination allowance, limited to is_demo endpoints outside prod.
+    demo-allowlist: ${NOTIFY_WEBHOOK_DEMO_ALLOWLIST:localhost,127.0.0.1}
+  retry:
+    # Demo-friendly retry timing (TRD section 9); production defaults are 30s / 15m.
+    base-delay: 3s
+    max-delay: 60s

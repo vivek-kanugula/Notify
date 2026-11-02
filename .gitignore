@@ -1,0 +1,84 @@
+# Compiled class files
+*.class
+
+# Log file
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+*.exe
+
+# virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Node & Frontend
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+*.local
+test-results/
+playwright-report/
+
+# Environment variables
+.env
+
+# Runtime state
+/.e2e-runtime/
+
+# IDE & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Compose secret override
+infra/docker-compose.secret.yml
+
+# Local developer tooling and plugins
+.agent/
+.agents/
+.aider-desk/
+.claude/
+.impeccable/
+.minimax/
+skills-lock.json
+AGENTS.md
+CLAUDE.md
+FILE_MANIFEST.txt
+
+# Internal documentation and specs
+docs/
+qa-artifacts/
+DESIGN.md
+PRODUCT.md
+frontend/scripts/
+scripts/ac14/
+scripts/ac14-live-check.ps1
+scripts/perf/*.exe

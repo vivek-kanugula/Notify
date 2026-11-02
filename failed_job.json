@@ -1,0 +1,161 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 125238572545,
+      "run_id": 41433794854,
+      "workflow_name": "gate",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/vivek-kanugula/Notify/actions/runs/41433794854",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVgAKUM8AAAAdKMz2AQ",
+      "head_sha": "849a1e0ff24675ed7e1776ebdcfa4fe0561cd5c4",
+      "url": "https://api.github.com/repos/vivek-kanugula/Notify/actions/jobs/125238572545",
+      "html_url": "https://github.com/vivek-kanugula/Notify/actions/runs/41433794854/job/125238572545",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-11-02T11:04:13Z",
+      "started_at": "2026-11-02T11:04:15Z",
+      "completed_at": "2026-11-02T11:05:06Z",
+      "name": "CI Test Gate",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-02T11:04:16Z",
+          "completed_at": "2026-11-02T11:04:17Z"
+        },
+        {
+          "name": "Initialize containers",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-02T11:04:17Z",
+          "completed_at": "2026-11-02T11:04:33Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-02T11:04:33Z",
+          "completed_at": "2026-11-02T11:04:34Z"
+        },
+        {
+          "name": "Set up JDK 25",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-02T11:04:34Z",
+          "completed_at": "2026-11-02T11:04:35Z"
+        },
+        {
+          "name": "Set up Node",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-02T11:04:35Z",
+          "completed_at": "2026-11-02T11:04:36Z"
+        },
+        {
+          "name": "Backend tests",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 6,
+          "started_at": "2026-11-02T11:04:36Z",
+          "completed_at": "2026-11-02T11:05:04Z"
+        },
+        {
+          "name": "Frontend install",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7,
+          "started_at": "2026-11-02T11:05:04Z",
+          "completed_at": "2026-11-02T11:05:04Z"
+        },
+        {
+          "name": "Frontend tests",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8,
+          "started_at": "2026-11-02T11:05:04Z",
+          "completed_at": "2026-11-02T11:05:04Z"
+        },
+        {
+          "name": "Frontend production build",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9,
+          "started_at": "2026-11-02T11:05:04Z",
+          "completed_at": "2026-11-02T11:05:04Z"
+        },
+        {
+          "name": "Docker Compose configuration check",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10,
+          "started_at": "2026-11-02T11:05:04Z",
+          "completed_at": "2026-11-02T11:05:04Z"
+        },
+        {
+          "name": "Upload test reports",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-02T11:05:04Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        },
+        {
+          "name": "Post Set up Node",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19,
+          "started_at": "2026-11-02T11:05:05Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        },
+        {
+          "name": "Post Set up JDK 25",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-11-02T11:05:05Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-11-02T11:05:05Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        },
+        {
+          "name": "Stop containers",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22,
+          "started_at": "2026-11-02T11:05:05Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-11-02T11:05:05Z",
+          "completed_at": "2026-11-02T11:05:05Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/vivek-kanugula/Notify/check-runs/125238572545",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000000029,
+      "runner_name": "GitHub Actions 1000000029",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

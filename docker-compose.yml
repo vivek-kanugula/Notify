@@ -1,0 +1,5 @@
+# Notify Root Docker Compose configuration
+# See infra/docker-compose.yml for detailed profile definitions
+
+include:
+  - infra/docker-compose.yml

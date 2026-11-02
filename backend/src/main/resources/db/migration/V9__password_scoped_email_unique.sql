@@ -1,0 +1,22 @@
+-- V9 (/ , P11): retire the global tenant_users email index in favour of the password-scoped one.
+--
+-- Supersedes **in part**. added V3's uq_tenant_users_global_lower_email to enforce canonical global
+-- email uniqueness over every tenant_users row. That is incompatible with accepted /a Google identity
+-- always gets its own tenant, so a verified Google email that an existing password account also uses must be able
+-- to exist as a separate row in a separate tenant.
+--
+-- What is retained, not relaxed:
+--   * global case-insensitive uniqueness for PASSWORD accounts - V8's uq_tenant_users_password_email
+--     (UNIQUE (lower(email)) WHERE password_hash IS NOT NULL) carries that invariant forward unchanged;
+--   * tenant_users.google_sub UNIQUE from V1, so one Google subject maps to exactly one identity;
+--   * uq_tenant_users_tenant_email from V1, so one email cannot repeat inside a single tenant;
+--   * chk_tenant_users_auth from V1, so every row still has a password or a google_sub.
+--
+-- What becomes possible: the same email on two rows in two different tenants, at most one of which is a password
+-- account. Every email lookup in the application is already scoped to password rows (slice 1), so no query becomes
+-- ambiguous.
+--
+-- Order matters: this runs after V8, so the password invariant is already enforced by its own index before the
+-- broader one is dropped - there is no window in which duplicate password emails could be inserted.
+-- Forward-only. V1-V8 are untouched, and a Git revert does not recreate this index on a database that applied V9.
+DROP INDEX IF EXISTS uq_tenant_users_global_lower_email;
