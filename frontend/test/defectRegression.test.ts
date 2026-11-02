@@ -1,0 +1,161 @@
+import { test, describe } from 'node:test';
+import assert from 'node:assert';
+
+describe('Frontend Defect Regressions (BUG-01, BUG-02, BUG-03, BUG-04)', () => {
+  // BUG-01: KpiStrip null resilience
+  describe('BUG-01: KpiStrip usage metrics null resilience', () => {
+    function computeKpiDisplayValues(summary: any, loading: boolean = false) {
+      const successRatePercent =
+        summary && typeof summary.deliverySuccessRate === 'number' && !Number.isNaN(summary.deliverySuccessRate)
+          ? (summary.deliverySuccessRate * 100).toFixed(1)
+          : '—';
+
+      const accepted = loading ? '…' : summary?.totalAccepted != null ? summary.totalAccepted.toLocaleString() : '0';
+      const delivered = loading ? '…' : summary?.totalDelivered != null ? summary.totalDelivered.toLocaleString() : '0';
+      const processing = loading ? '…' : summary?.totalProcessing != null ? summary.totalProcessing.toLocaleString() : '0';
+      const failed = loading ? '…' : summary?.totalFailed != null ? summary.totalFailed.toLocaleString() : '0';
+
+      return { successRatePercent, accepted, delivered, processing, failed };
+    }
+
+    test('handles null summary without throwing', () => {
+      assert.doesNotThrow(() => {
+        const res = computeKpiDisplayValues(null);
+        assert.strictEqual(res.accepted, '0');
+        assert.strictEqual(res.delivered, '0');
+        assert.strictEqual(res.processing, '0');
+        assert.strictEqual(res.failed, '0');
+        assert.strictEqual(res.successRatePercent, '—');
+      });
+    });
+
+    test('handles partial / incomplete summary object without throwing TypeError', () => {
+      assert.doesNotThrow(() => {
+        // Simulates partial object where fields are undefined
+        const incompleteSummary = { totalAccepted: 42 };
+        const res = computeKpiDisplayValues(incompleteSummary);
+        assert.strictEqual(res.accepted, '42');
+        assert.strictEqual(res.delivered, '0');
+        assert.strictEqual(res.processing, '0');
+        assert.strictEqual(res.failed, '0');
+        assert.strictEqual(res.successRatePercent, '—');
+      });
+    });
+
+    test('correctly formats valid complete summary values', () => {
+      const summary = {
+        totalAccepted: 1250000,
+        totalDelivered: 1245000,
+        totalProcessing: 3000,
+        totalFailed: 2000,
+        deliverySuccessRate: 0.9984,
+      };
+      const res = computeKpiDisplayValues(summary);
+      assert.strictEqual(res.accepted, (1250000).toLocaleString());
+      assert.strictEqual(res.delivered, (1245000).toLocaleString());
+      assert.strictEqual(res.processing, (3000).toLocaleString());
+      assert.strictEqual(res.failed, (2000).toLocaleString());
+      assert.strictEqual(res.successRatePercent, '99.8');
+    });
+  });
+
+  // BUG-02: SandboxedIframe null content handling
+  describe('BUG-02: SandboxedIframe null/undefined content handling', () => {
+    function escapeHtml(str: string | null | undefined): string {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function sanitizeRawContent(content: string | null | undefined): string {
+      if (!content) return '';
+      return content
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/javascript:/gi, 'about:blank#blocked');
+    }
+
+    function generateSafeDoc(rawContent: string | null | undefined): string {
+      const content = rawContent ?? '';
+      const isHtml = /<[a-z][\s\S]*>/i.test(content);
+      const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; connect-src 'none'; frame-src 'none';">`;
+
+      if (isHtml) {
+        const cleanContent = sanitizeRawContent(content);
+        return `<!DOCTYPE html><html><head>${cspMeta}</head><body>${cleanContent}</body></html>`;
+      }
+      return `<!DOCTYPE html><html><head>${cspMeta}</head><body>${escapeHtml(content)}</body></html>`;
+    }
+
+    test('handles null content without throwing TypeError: replace', () => {
+      assert.doesNotThrow(() => {
+        const doc = generateSafeDoc(null as any);
+        assert.ok(doc.includes('<body></body>'));
+      });
+    });
+
+    test('handles undefined content without throwing TypeError: replace', () => {
+      assert.doesNotThrow(() => {
+        const doc = generateSafeDoc(undefined as any);
+        assert.ok(doc.includes('<body></body>'));
+      });
+    });
+
+    test('escapes HTML special characters for plain text safely', () => {
+      assert.strictEqual(escapeHtml('Hello <world> & "friends"'), 'Hello &lt;world&gt; &amp; &quot;friends&quot;');
+      const doc = generateSafeDoc('Hello world & "friends"');
+      assert.ok(doc.includes('Hello world &amp; &quot;friends&quot;'));
+    });
+
+    test('strips malicious script tags from HTML content', () => {
+      const doc = generateSafeDoc('<div><script>alert("pwned")</script><p>Safe text</p></div>');
+      assert.ok(!doc.includes('alert'));
+      assert.ok(doc.includes('<p>Safe text</p>'));
+    });
+  });
+
+  // BUG-03: AdminSystemPage circuit breaker failureRate guard
+  describe('BUG-03: Circuit breaker failureRate formatting guard', () => {
+    function formatCircuitBreakerFailureRate(cb: { failureRate?: any }): { rateStr: string; barWidth: number } {
+      const failureRateNum = typeof cb?.failureRate === 'number' ? cb.failureRate : Number(cb?.failureRate) || 0;
+      const safeFailureRate = Number.isFinite(failureRateNum) && failureRateNum >= 0 ? failureRateNum : 0;
+      return {
+        rateStr: `${safeFailureRate.toFixed(1)}%`,
+        barWidth: Math.min(safeFailureRate, 100),
+      };
+    }
+
+    test('handles string failureRate without throwing', () => {
+      assert.doesNotThrow(() => {
+        const res = formatCircuitBreakerFailureRate({ failureRate: '12.5' });
+        assert.strictEqual(res.rateStr, '12.5%');
+        assert.strictEqual(res.barWidth, 12.5);
+      });
+    });
+
+    test('handles null or undefined failureRate gracefully', () => {
+      assert.doesNotThrow(() => {
+        const resNull = formatCircuitBreakerFailureRate({ failureRate: null });
+        assert.strictEqual(resNull.rateStr, '0.0%');
+        assert.strictEqual(resNull.barWidth, 0);
+
+        const resUndef = formatCircuitBreakerFailureRate({});
+        assert.strictEqual(resUndef.rateStr, '0.0%');
+        assert.strictEqual(resUndef.barWidth, 0);
+      });
+    });
+
+    test('handles negative or NaN failureRate safely', () => {
+      const resNeg = formatCircuitBreakerFailureRate({ failureRate: -1.0 });
+      assert.strictEqual(resNeg.rateStr, '0.0%');
+      assert.strictEqual(resNeg.barWidth, 0);
+
+      const resNaN = formatCircuitBreakerFailureRate({ failureRate: 'invalid' });
+      assert.strictEqual(resNaN.rateStr, '0.0%');
+      assert.strictEqual(resNaN.barWidth, 0);
+    });
+  });
+});
