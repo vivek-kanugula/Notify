@@ -210,6 +210,11 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: https://${DOMAIN:-localhost}/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Seamless access from Notify Admin Console (single pane of glass)
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_ANONYMOUS_ORG_NAME: "Main Org."
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

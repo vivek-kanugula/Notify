@@ -46,6 +46,12 @@ export default defineConfig({
       '/actuator': {
         target: backend,
         changeOrigin: true
+      },
+      // Observability proxy for Grafana dashboards & Loki/Tempo explore in local development
+      '/grafana': {
+        target: process.env.NOTIFY_GRAFANA_URL ?? 'http://localhost:3000',
+        changeOrigin: true,
+        ws: true
       }
     }
   }
