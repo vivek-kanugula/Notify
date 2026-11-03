@@ -154,6 +154,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Default home dashboard directly opens the platform overview
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/notify-overview.json"
       # Seamless access from Notify Admin Console (single pane of glass)
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
