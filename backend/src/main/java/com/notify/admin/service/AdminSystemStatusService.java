@@ -65,9 +65,9 @@ public class AdminSystemStatusService {
 
         String overall = UP.equals(db.status()) ? UP : DOWN;
         Map<String, String> grafanaLinks = new LinkedHashMap<>();
-        grafanaLinks.put("overview", "http://localhost:3000/d/notify-overview/notify-overview");
-        grafanaLinks.put("logs", "http://localhost:3000/explore?schemaVersion=1&panes=" + java.net.URLEncoder.encode("{\"A\":{\"datasource\":\"notify-loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{service_name=~\\\".+\\\"}\",\"queryType\":\"range\"}],\"range\":{\"from\":\"now-1h\",\"to\":\"now\"}}}", java.nio.charset.StandardCharsets.UTF_8));
-        grafanaLinks.put("traces", "http://localhost:3000/explore?schemaVersion=1&panes=" + java.net.URLEncoder.encode("{\"A\":{\"datasource\":\"notify-tempo\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"traceql\",\"query\":\"{}\"}],\"range\":{\"from\":\"now-1h\",\"to\":\"now\"}}}", java.nio.charset.StandardCharsets.UTF_8));
+        grafanaLinks.put("overview", "/grafana/d/notify-overview/notify-overview");
+        grafanaLinks.put("logs", "/grafana/explore?schemaVersion=1&panes=" + java.net.URLEncoder.encode("{\"A\":{\"datasource\":\"notify-loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{service_name=~\\\".+\\\"}\",\"queryType\":\"range\"}],\"range\":{\"from\":\"now-1h\",\"to\":\"now\"}}}", java.nio.charset.StandardCharsets.UTF_8));
+        grafanaLinks.put("traces", "/grafana/explore?schemaVersion=1&panes=" + java.net.URLEncoder.encode("{\"A\":{\"datasource\":\"notify-tempo\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"traceql\",\"query\":\"{}\"}],\"range\":{\"from\":\"now-1h\",\"to\":\"now\"}}}", java.nio.charset.StandardCharsets.UTF_8));
 
         return new AdminSystemStatusResponse(overall, clock.instant(), components, breakers(), grafanaLinks);
     }

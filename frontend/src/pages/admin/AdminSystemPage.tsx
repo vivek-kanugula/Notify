@@ -397,7 +397,7 @@ export default function AdminSystemPage() {
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
           <a
-            href={data?.grafanaLinks?.overview || 'http://localhost:3000/d/notify-overview/notify-overview'}
+            href={data?.grafanaLinks?.overview || '/grafana/d/notify-overview/notify-overview'}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"
@@ -412,7 +412,7 @@ export default function AdminSystemPage() {
           </a>
 
           <a
-            href={data?.grafanaLinks?.logs || 'http://localhost:3000/explore?schemaVersion=1&panes=%7B%22A%22%3A%7B%22datasource%22%3A%22notify-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice_name%3D~%5C%22.%2B%5C%22%7D%22%2C%22queryType%22%3A%22range%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D'}
+            href={data?.grafanaLinks?.logs || '/grafana/explore?schemaVersion=1&panes=%7B%22A%22%3A%7B%22datasource%22%3A%22notify-loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice_name%3D~%5C%22.%2B%5C%22%7D%22%2C%22queryType%22%3A%22range%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D'}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"
@@ -427,7 +427,7 @@ export default function AdminSystemPage() {
           </a>
 
           <a
-            href={data?.grafanaLinks?.traces || 'http://localhost:3000/explore?schemaVersion=1&panes=%7B%22A%22%3A%7B%22datasource%22%3A%22notify-tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D'}
+            href={data?.grafanaLinks?.traces || '/grafana/explore?schemaVersion=1&panes=%7B%22A%22%3A%7B%22datasource%22%3A%22notify-tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D'}
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary"
