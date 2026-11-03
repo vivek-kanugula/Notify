@@ -166,7 +166,7 @@ services:
       NOTIFY_TRACE_SAMPLING: ${NOTIFY_TRACE_SAMPLING:-0.1}
       NOTIFY_OTLP_TRACES_ENDPOINT: ${NOTIFY_OTLP_TRACES_ENDPOINT:-http://otel-collector:4318/v1/traces}
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/readinessState || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health/readiness || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
