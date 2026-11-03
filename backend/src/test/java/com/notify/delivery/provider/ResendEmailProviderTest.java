@@ -205,6 +205,31 @@ class ResendEmailProviderTest {
     }
 
     @Test
+    @DisplayName("R5/R6 request formats from header with fromName when provided")
+    void requestWithFromName() throws Exception {
+        server.handler = (socket, req) -> respond(socket, 200, "{\"id\":\"re_name_123\"}");
+
+        EmailSendRequest req = new EmailSendRequest(
+                "nid-1-3",
+                "notifications@example.com",
+                RECIPIENT,
+                "Support Notification",
+                BODY,
+                "support@acme.com",
+                "Acme Corp via Notify"
+        );
+
+        DeliveryResult result = provider.send(req);
+
+        assertThat(result).isEqualTo(new DeliveryResult.Success("re_name_123"));
+        assertThat(server.requests).hasSize(1);
+        Captured captured = server.requests.get(0);
+        JsonNode json = MAPPER.readTree(captured.body());
+        assertThat(json.get("from").asText()).isEqualTo("\"Acme Corp via Notify\" <notifications@example.com>");
+        assertThat(json.get("reply_to").asText()).isEqualTo("support@acme.com");
+    }
+
+    @Test
     @DisplayName("R1/R5 end-to-end status mapping over a real HTTP exchange")
     void statusMappingEndToEnd() {
         Object[][] cases = {

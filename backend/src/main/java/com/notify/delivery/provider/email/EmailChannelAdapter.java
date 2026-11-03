@@ -74,12 +74,12 @@ public class EmailChannelAdapter implements DeliveryChannelAdapter {
      */
     @Override
     public DeliveryResult send(ClaimSnapshot claim) {
-        String from = formatSender(claim.sender(), resolveTenantName(claim));
+        String fromName = formatFromName(resolveTenantName(claim));
         String replyTo = extractReplyTo(claim.metadata());
         try {
             return provider.send(new EmailSendRequest(
                     claim.id() + "-" + claim.deliveryCycle(),
-                    from, claim.recipient(), claim.subject(), claim.body(), replyTo));
+                    claim.sender(), claim.recipient(), claim.subject(), claim.body(), replyTo, fromName));
         } catch (ProviderDeferredException e) {
             log.info("Email attempt deferred locally before any request (notificationId={}, reason={})",
                     claim.id(), e.code());
@@ -100,6 +100,14 @@ public class EmailChannelAdapter implements DeliveryChannelAdapter {
             log.debug("Tenant lookup for sender format skipped: {}", e.getMessage());
             return null;
         }
+    }
+
+    public static String formatFromName(String tenantName) {
+        if (tenantName == null || tenantName.isBlank()) {
+            return null;
+        }
+        String clean = tenantName.replaceAll("[\r\n\"]", "").trim();
+        return clean.isEmpty() ? null : clean + " via Notify";
     }
 
     public static String formatSender(String configuredSender, String tenantName) {

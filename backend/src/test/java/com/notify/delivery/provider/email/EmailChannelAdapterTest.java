@@ -22,6 +22,28 @@ import static org.mockito.Mockito.when;
 class EmailChannelAdapterTest {
 
     @Test
+    @DisplayName("formatFromName applies 'Tenant via Notify' display name")
+    void formatsFromNameWithTenantName() {
+        String result = EmailChannelAdapter.formatFromName("Acme Corp");
+        assertThat(result).isEqualTo("Acme Corp via Notify");
+    }
+
+    @Test
+    @DisplayName("formatFromName returns null when tenant name is missing or blank")
+    void formatFromNameReturnsNullWhenBlank() {
+        assertThat(EmailChannelAdapter.formatFromName(null)).isNull();
+        assertThat(EmailChannelAdapter.formatFromName("   ")).isNull();
+    }
+
+    @Test
+    @DisplayName("formatFromName sanitizes header injection characters")
+    void sanitizesFromNameHeaderInjection() {
+        String result = EmailChannelAdapter.formatFromName("Acme\r\nBcc: evil@test.com");
+        assertThat(result).doesNotContain("\r").doesNotContain("\n");
+        assertThat(result).isEqualTo("AcmeBcc: evil@test.com via Notify");
+    }
+
+    @Test
     @DisplayName("formatSender applies 'Tenant via Notify' display name to raw email")
     void formatsSenderWithTenantName() {
         String result = EmailChannelAdapter.formatSender("notifications@mail.vivekstack.dev", "Acme Corp");
@@ -108,7 +130,8 @@ class EmailChannelAdapterTest {
         assertThat(result).isInstanceOf(DeliveryResult.Success.class);
         EmailSendRequest sent = captured.get();
         assertThat(sent).isNotNull();
-        assertThat(sent.from()).isEqualTo("\"Acme Corp via Notify\" <notifications@mail.vivekstack.dev>");
+        assertThat(sent.from()).isEqualTo("notifications@mail.vivekstack.dev");
+        assertThat(sent.fromName()).isEqualTo("Acme Corp via Notify");
         assertThat(sent.to()).isEqualTo("customer@example.com");
         assertThat(sent.replyTo()).isEqualTo("billing@acme.com");
     }

@@ -173,7 +173,7 @@ public class ResendEmailProvider implements EmailProvider {
         byte[] payload;
         try {
             Map<String, Object> bodyMap = new LinkedHashMap<>();
-            bodyMap.put("from", nullToEmpty(request.from()));
+            bodyMap.put("from", formatFromHeader(request.from(), request.fromName()));
             bodyMap.put("to", List.of(nullToEmpty(request.to())));
             bodyMap.put("subject", nullToEmpty(request.subject()));
             bodyMap.put("text", nullToEmpty(request.text()));
@@ -305,6 +305,26 @@ public class ResendEmailProvider implements EmailProvider {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    public static String formatFromHeader(String from, String fromName) {
+        String cleanFrom = nullToEmpty(from).trim();
+        if (fromName == null || fromName.isBlank()) {
+            return cleanFrom;
+        }
+        String cleanName = fromName.replaceAll("[\r\n\"]", "").trim();
+        if (cleanName.isEmpty()) {
+            return cleanFrom;
+        }
+        String email = cleanFrom;
+        if (cleanFrom.contains("<") && cleanFrom.contains(">")) {
+            int start = cleanFrom.indexOf('<');
+            int end = cleanFrom.indexOf('>');
+            if (start != -1 && end > start) {
+                email = cleanFrom.substring(start + 1, end).trim();
+            }
+        }
+        return "\"" + cleanName + "\" <" + email + ">";
     }
 
     @PreDestroy
