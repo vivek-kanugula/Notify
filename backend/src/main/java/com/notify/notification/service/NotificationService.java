@@ -75,6 +75,7 @@ public class NotificationService {
     private final com.notify.quartz.service.NotificationSchedulerService notificationSchedulerService;
     private final MailProperties mailProperties;
     private final NotifyMetrics notifyMetrics;
+    private final com.notify.tenant.repository.TenantUserRepository tenantUserRepository;
 
     public NotificationService(
             NotificationRepository notificationRepository,
@@ -101,6 +102,7 @@ public class NotificationService {
                 eventPublisher,
                 clock,
                 transactionManager,
+                null,
                 null,
                 null,
                 null
@@ -136,6 +138,7 @@ public class NotificationService {
                 transactionManager,
                 notificationSchedulerService,
                 mailProperties,
+                null,
                 null
         );
     }
@@ -155,7 +158,8 @@ public class NotificationService {
             PlatformTransactionManager transactionManager,
             @Autowired(required = false) com.notify.quartz.service.NotificationSchedulerService notificationSchedulerService,
             @Autowired(required = false) MailProperties mailProperties,
-            @Autowired(required = false) NotifyMetrics notifyMetrics
+            @Autowired(required = false) NotifyMetrics notifyMetrics,
+            @Autowired(required = false) com.notify.tenant.repository.TenantUserRepository tenantUserRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -171,6 +175,7 @@ public class NotificationService {
         this.notificationSchedulerService = notificationSchedulerService;
         this.mailProperties = mailProperties;
         this.notifyMetrics = notifyMetrics;
+        this.tenantUserRepository = tenantUserRepository;
     }
 
     /**
@@ -299,7 +304,23 @@ public class NotificationService {
             notification.setBody(renderedBody);
             notification.setTemplateVersionId(snapshot != null ? snapshot.templateVersionId() : null);
             notification.setTemplateVariables(toJson(request.templateVariables()));
-            notification.setMetadata(toJson(request.metadata()));
+
+            Map<String, Object> metaMap = request.metadata() != null
+                    ? new java.util.LinkedHashMap<>(request.metadata())
+                    : new java.util.LinkedHashMap<>();
+            if (request.channel() == Channel.EMAIL) {
+                if (request.replyTo() != null && !request.replyTo().isBlank()) {
+                    metaMap.put("replyTo", request.replyTo().trim());
+                } else if (tenantUserRepository != null) {
+                    try {
+                        tenantUserRepository.findFirstByTenantIdAndRole(tenantId, com.notify.common.model.Role.TENANT_OWNER)
+                                .ifPresent(owner -> metaMap.put("replyTo", owner.getEmail()));
+                    } catch (Exception e) {
+                        log.debug("Tenant owner lookup for reply-to skipped: {}", e.getMessage());
+                    }
+                }
+            }
+            notification.setMetadata(toJson(metaMap));
             notification.setTraceContext(traceContext);
             if (request.channel() == Channel.EMAIL && mailProperties != null) {
                 // server-selected sender snapshot; client input and metadata never choose it

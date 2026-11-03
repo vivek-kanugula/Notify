@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -171,11 +172,15 @@ public class ResendEmailProvider implements EmailProvider {
     private DeliveryResult sendDirectly(EmailSendRequest request) {
         byte[] payload;
         try {
-            payload = MAPPER.writeValueAsBytes(Map.of(
-                    "from", nullToEmpty(request.from()),
-                    "to", List.of(nullToEmpty(request.to())),
-                    "subject", nullToEmpty(request.subject()),
-                    "text", nullToEmpty(request.text())));
+            Map<String, Object> bodyMap = new LinkedHashMap<>();
+            bodyMap.put("from", nullToEmpty(request.from()));
+            bodyMap.put("to", List.of(nullToEmpty(request.to())));
+            bodyMap.put("subject", nullToEmpty(request.subject()));
+            bodyMap.put("text", nullToEmpty(request.text()));
+            if (request.replyTo() != null && !request.replyTo().isBlank()) {
+                bodyMap.put("reply_to", request.replyTo().trim());
+            }
+            payload = MAPPER.writeValueAsBytes(bodyMap);
         } catch (JsonProcessingException e) {
             return new DeliveryResult.PermanentFailure("VALIDATION_FAILED", "Email could not be serialized", null, null);
         }

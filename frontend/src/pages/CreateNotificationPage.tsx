@@ -35,6 +35,8 @@ export default function CreateNotificationPage() {
   // Step 2: Recipient
   const [recipient, setRecipient] = useState('');
   const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState('');
+  const [replyToError, setReplyToError] = useState<string | null>(null);
 
   // Step 3: Content Mode
   const [contentMode, setContentMode] = useState<'custom' | 'template'>('custom');
@@ -182,6 +184,20 @@ export default function CreateNotificationPage() {
     return true;
   };
 
+  const validateReplyTo = (): boolean => {
+    if (channel !== 'EMAIL' || !replyTo.trim()) {
+      setReplyToError(null);
+      return true;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(replyTo.trim())) {
+      setReplyToError('Please enter a valid reply-to email address');
+      return false;
+    }
+    setReplyToError(null);
+    return true;
+  };
+
   const validateSchedule = (): boolean => {
     if (dispatchMode !== 'schedule') return true;
     if (!scheduledAt) {
@@ -217,7 +233,7 @@ export default function CreateNotificationPage() {
       return;
     }
 
-    if (!validateRecipient() || !validateSchedule()) {
+    if (!validateRecipient() || !validateReplyTo() || !validateSchedule()) {
       return;
     }
 
@@ -256,6 +272,7 @@ export default function CreateNotificationPage() {
         idempotencyKey: idempotencyKey.trim() || undefined,
         scheduledAt: dispatchMode === 'schedule' && scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         metadata: parsedMetadata,
+        replyTo: channel === 'EMAIL' && replyTo.trim() ? replyTo.trim() : undefined,
       };
 
       const result = await createNotification(payload, idempotencyKey.trim() || undefined);
@@ -427,6 +444,33 @@ export default function CreateNotificationPage() {
 
         {/* Section 2: Recipient Target */}
         <div className="panel" style={{ padding: 20, marginBottom: 16 }}>
+          {channel === 'EMAIL' && (
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '12px 14px',
+                backgroundColor: 'var(--color-subtle)',
+                border: '1px solid var(--color-rail)',
+                borderRadius: 'var(--radius-control)',
+                fontSize: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600, color: 'var(--color-ink-2)' }}>Sender Identity:</span>
+                <span className="mono" style={{ color: 'var(--color-harbor)', fontWeight: 600 }}>
+                  {user?.tenantName ? `"${user.tenantName} via Notify"` : '"Your Organization via Notify"'}{' '}
+                  &lt;notifications@mail.vivekstack.dev&gt;
+                </span>
+              </div>
+              <span style={{ color: 'var(--color-ink-3)', fontSize: 11 }}>
+                Authenticated via platform DKIM/SPF. Recipients will see your organization name in their inbox.
+              </span>
+            </div>
+          )}
+
           <label
             htmlFor="recipient-input"
             style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--color-harbor)', marginBottom: 4 }}
@@ -463,6 +507,43 @@ export default function CreateNotificationPage() {
             <span style={{ color: 'var(--color-st-failed)', fontSize: 12, marginTop: 4, display: 'block' }}>
               {recipientError}
             </span>
+          )}
+
+          {channel === 'EMAIL' && (
+            <div style={{ marginTop: 14 }}>
+              <label
+                htmlFor="reply-to-input"
+                style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', marginBottom: 4 }}
+              >
+                Reply-To Address (Optional)
+              </label>
+              <input
+                id="reply-to-input"
+                type="email"
+                value={replyTo}
+                onChange={(e) => {
+                  setReplyTo(e.target.value);
+                  if (replyToError) validateReplyTo();
+                }}
+                onBlur={validateReplyTo}
+                placeholder={user?.email || 'support@yourdomain.com'}
+                className="mono"
+                style={{
+                  borderColor: replyToError ? 'var(--color-st-failed)' : undefined,
+                }}
+              />
+              {replyToError ? (
+                <span style={{ color: 'var(--color-st-failed)', fontSize: 12, marginTop: 4, display: 'block' }}>
+                  {replyToError}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--color-ink-3)', marginTop: 4, display: 'block' }}>
+                  {user?.email
+                    ? `Leave blank to default to tenant owner (${user.email}). Directs customer replies here.`
+                    : 'Directs customer replies to this address instead of the platform no-reply address.'}
+                </span>
+              )}
+            </div>
           )}
         </div>
 

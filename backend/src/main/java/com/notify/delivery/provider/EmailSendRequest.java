@@ -11,8 +11,13 @@ public record EmailSendRequest(
         String from,
         String to,
         String subject,
-        String text
+        String text,
+        String replyTo
 ) {
+    public EmailSendRequest(String idempotencyKey, String from, String to, String subject, String text) {
+        this(idempotencyKey, from, to, subject, text, null);
+    }
+
     @Override
     public String toString() {
         return "EmailSendRequest[idempotencyKey=" + idempotencyKey + "]";

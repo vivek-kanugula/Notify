@@ -32,5 +32,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUserEntity, UU
      */
     @Query("SELECT u.id FROM TenantUserEntity u WHERE u.tenantId = :tenantId")
     List<UUID> findIdsByTenantId(@Param("tenantId") UUID tenantId);
+
+    Optional<TenantUserEntity> findFirstByTenantIdAndRole(UUID tenantId, com.notify.common.model.Role role);
 }
 

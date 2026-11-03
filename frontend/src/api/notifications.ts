@@ -68,6 +68,7 @@ export interface CreateNotificationRequest {
   metadata?: Record<string, any> | null;
   idempotencyKey?: string | null;
   scheduledAt?: string | null;
+  replyTo?: string | null;
 }
 
 export interface NotificationAcceptanceResponse {

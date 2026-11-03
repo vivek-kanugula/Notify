@@ -608,6 +608,29 @@ export default function NotificationDetailPage() {
                 )}
               </div>
 
+              {/* Reply-To Header */}
+              {detail.channel === 'EMAIL' && detail.metadata?.replyTo && (
+                <div>
+                  <span style={{ fontSize: 11, color: 'var(--color-ink-3)', fontWeight: 600, display: 'block', marginBottom: 2 }}>
+                    Reply-To Address
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span className="mono" style={{ fontSize: 12, wordBreak: 'break-all', color: 'var(--color-harbor)' }}>
+                      {String(detail.metadata?.replyTo)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(String(detail.metadata?.replyTo || ''), 'replyTo')}
+                      title="Copy Reply-To"
+                      className="btn btn-ghost btn-icon"
+                      style={{ color: 'var(--color-signal)' }}
+                    >
+                      {copiedKey === 'replyTo' ? <Check size={13} /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Timestamps */}
               <div style={{ borderTop: '1px solid var(--color-rail)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>

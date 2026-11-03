@@ -180,6 +180,31 @@ class ResendEmailProviderTest {
     }
 
     @Test
+    @DisplayName("R5/R6 request includes reply_to when provided in EmailSendRequest")
+    void requestWithReplyTo() throws Exception {
+        server.handler = (socket, req) -> respond(socket, 200, "{\"id\":\"re_replyto_123\"}");
+
+        EmailSendRequest req = new EmailSendRequest(
+                "nid-1-2",
+                "\"Acme Corp via Notify\" <notifications@example.com>",
+                RECIPIENT,
+                "Support Notification",
+                BODY,
+                "support@acme.com"
+        );
+
+        DeliveryResult result = provider.send(req);
+
+        assertThat(result).isEqualTo(new DeliveryResult.Success("re_replyto_123"));
+        assertThat(server.requests).hasSize(1);
+        Captured captured = server.requests.get(0);
+        JsonNode json = MAPPER.readTree(captured.body());
+        assertThat(json.fieldNames()).toIterable().containsExactlyInAnyOrder("from", "to", "subject", "text", "reply_to");
+        assertThat(json.get("from").asText()).isEqualTo("\"Acme Corp via Notify\" <notifications@example.com>");
+        assertThat(json.get("reply_to").asText()).isEqualTo("support@acme.com");
+    }
+
+    @Test
     @DisplayName("R1/R5 end-to-end status mapping over a real HTTP exchange")
     void statusMappingEndToEnd() {
         Object[][] cases = {
