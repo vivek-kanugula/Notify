@@ -15,10 +15,10 @@
       "title": "Outbox pending backlog",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_pending" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_pending or vector(0)" }
       ]
     },
     {
@@ -27,10 +27,10 @@
       "title": "Oldest pending outbox age (s)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "s", "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_oldest_age_seconds" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_outbox_oldest_age_seconds or vector(0)" }
       ]
     },
     {
@@ -39,10 +39,10 @@
       "title": "DLQ open",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_dlq_open" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_dlq_open or vector(0)" }
       ]
     }
   ]

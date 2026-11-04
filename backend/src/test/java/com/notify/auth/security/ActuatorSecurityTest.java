@@ -65,6 +65,8 @@ class ActuatorSecurityTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/actuator/prometheus").header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isOk());
+        mockMvc.perform(get("/actuator/prometheus").header("Authorization", "Bearer " + com.notify.auth.service.JwtService.PROMETHEUS_SCRAPE_TOKEN))
+                .andExpect(status().isOk());
     }
 
     @Test

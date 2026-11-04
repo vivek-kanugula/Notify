@@ -15,10 +15,10 @@
       "title": "JVM heap used",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "bytes", "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum(jvm_memory_used_bytes{area=\"heap\"})" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) or vector(0)" }
       ]
     },
     {
@@ -27,10 +27,10 @@
       "title": "Hikari active connections",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "hikaricp_connections_active" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "hikaricp_connections_active or vector(0)" }
       ]
     },
     {
@@ -39,10 +39,10 @@
       "title": "Rate-limit throttled",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
       "options": {},
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (type) (rate(notify_ratelimit_throttled_total[5m]))", "legendFormat": "{{type}}" }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (type) (rate(notify_ratelimit_throttled_total[5m])) or (sum by (type) (notify_ratelimit_throttled_total) * 0) or vector(0)", "legendFormat": "{{type}}" }
       ]
     }
   ]
