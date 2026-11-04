@@ -11,6 +11,8 @@ import com.notify.common.model.ContentType;
 import com.notify.common.model.TemplateVersionStatus;
 import com.notify.template.dto.CreateTemplateRequest;
 import com.notify.template.dto.CreateVersionRequest;
+import com.notify.template.dto.DeleteVersionsRequest;
+import com.notify.template.dto.DeleteVersionsResponse;
 import com.notify.template.dto.PreviewTemplateRequest;
 import com.notify.template.dto.UpdateVersionRequest;
 import org.junit.jupiter.api.BeforeEach;
