@@ -195,6 +195,8 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # No ports exposed — accessed via Grafana
 
   grafana:
@@ -211,7 +213,7 @@ services:
       GF_SERVER_ROOT_URL: https://${DOMAIN:-localhost}/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       # Default home dashboard directly opens the platform overview
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/notify-overview.json"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/dashboards/notify-overview.json"
       # Seamless access from Notify Admin Console (single pane of glass)
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
@@ -219,6 +221,7 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "false"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     # Bound to host loopback interface only — accessible securely via SSH tunnel (ssh -L 3000:localhost:3000)

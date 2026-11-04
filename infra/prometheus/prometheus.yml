@@ -13,5 +13,5 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     bearer_token: eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJqdGkiOiJwcm9tZXRoZXVzLXRva2VuLTEiLCJhdWQiOlsibm90aWZ5LWFkbWluIl0sInJvbGVzIjpbIlBMQVRGT1JNX0FETUlOIl0sImlhdCI6MTc5MzM1NTI1MywiZXhwIjoyMTA4NzE1MjUzfQ.ACfRLV-pt1RQGZYSZt39KJdxPjtZTyq8kMxuYDVHCPUek7bA8IeUmQC012DS-U44
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["backend:8080", "host.docker.internal:8080"]
 
