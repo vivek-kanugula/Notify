@@ -5,7 +5,6 @@ import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext';
 import LoginPage from './pages/LoginPage';
 import DashboardShell from './pages/DashboardShell';
 import LandingPage from './pages/LandingPage';
-import DemoInboxPage from './pages/DemoInboxPage';
 
 // Admin Pages
 import AdminLoginPage from './pages/admin/AdminLoginPage';
@@ -99,9 +98,9 @@ function AdminPublicOnlyRoute({ children }: { children: ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public Landing & Demo Pages */}
+      {/* Public Landing */}
       <Route path="/" element={<LandingPage />} />
-      <Route path="/demo" element={<DemoInboxPage />} />
+      <Route path="/demo" element={<Navigate to="/" replace />} />
       <Route path="/signup" element={
         <PublicOnlyRoute>
           <LoginPage initialSignup={true} />

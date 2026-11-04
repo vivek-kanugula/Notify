@@ -438,4 +438,148 @@ class TemplateServiceTest {
                 .isInstanceOf(NotifyException.class)
                 .satisfies(ex -> assertThat(((NotifyException) ex).getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND));
     }
+
+    @Test
+    @DisplayName("Delete single version succeeds and updates parent template timestamp")
+    void deleteSingleVersionSuccess() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Templ", Channel.IN_APP, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity v2 = new TemplateVersionEntity(
+                tenantId, templateId, 2, TemplateVersionStatus.DRAFT, null, "v2 body", ContentType.TEXT, List.of()
+        );
+        v2.setId(UUID.randomUUID());
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, 2))
+                .thenReturn(Optional.of(v2));
+        when(templateVersionRepository.countNotificationsReferencingVersion(tenantId, v2.getId())).thenReturn(0L);
+
+        templateService.deleteVersion(tenantId, templateId, 2);
+
+        verify(templateVersionRepository).delete(v2);
+        verify(templateVersionRepository).flush();
+        verify(templateRepository).save(template);
+    }
+
+    @Test
+    @DisplayName("Delete single version throws NOT_FOUND when version does not exist")
+    void deleteSingleVersionNotFound() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Templ", Channel.IN_APP, null);
+        template.setId(templateId);
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, 99))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> templateService.deleteVersion(tenantId, templateId, 99))
+                .isInstanceOf(NotifyException.class)
+                .satisfies(ex -> assertThat(((NotifyException) ex).getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("Delete single version throws VALIDATION_FAILED when referenced by notifications")
+    void deleteSingleVersionReferencedByNotifications() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Templ", Channel.IN_APP, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity v1 = new TemplateVersionEntity(
+                tenantId, templateId, 1, TemplateVersionStatus.PUBLISHED, null, "v1 body", ContentType.TEXT, List.of()
+        );
+        v1.setId(UUID.randomUUID());
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, 1))
+                .thenReturn(Optional.of(v1));
+        when(templateVersionRepository.countNotificationsReferencingVersion(tenantId, v1.getId())).thenReturn(5L);
+
+        assertThatThrownBy(() -> templateService.deleteVersion(tenantId, templateId, 1))
+                .isInstanceOf(NotifyException.class)
+                .satisfies(ex -> {
+                    assertThat(((NotifyException) ex).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                    assertThat(ex.getMessage()).contains("referenced by 5 notification(s)");
+                });
+
+        verify(templateVersionRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("Bulk delete versions succeeds for multiple versions at a time")
+    void deleteMultipleVersionsSuccess() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Templ", Channel.IN_APP, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity v2 = new TemplateVersionEntity(
+                tenantId, templateId, 2, TemplateVersionStatus.DRAFT, null, "v2 body", ContentType.TEXT, List.of()
+        );
+        v2.setId(UUID.randomUUID());
+        TemplateVersionEntity v3 = new TemplateVersionEntity(
+                tenantId, templateId, 3, TemplateVersionStatus.DRAFT, null, "v3 body", ContentType.TEXT, List.of()
+        );
+        v3.setId(UUID.randomUUID());
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumberIn(eq(tenantId), eq(templateId), eq(List.of(2, 3))))
+                .thenReturn(List.of(v2, v3));
+        when(templateVersionRepository.countNotificationsReferencingVersion(eq(tenantId), any())).thenReturn(0L);
+
+        DeleteVersionsResponse response = templateService.deleteVersions(tenantId, templateId, List.of(2, 3));
+
+        assertThat(response.templateId()).isEqualTo(templateId);
+        assertThat(response.deletedVersions()).containsExactly(2, 3);
+        assertThat(response.count()).isEqualTo(2);
+
+        verify(templateVersionRepository).deleteAll(List.of(v2, v3));
+        verify(templateVersionRepository).flush();
+        verify(templateRepository).save(template);
+    }
+
+    @Test
+    @DisplayName("Bulk delete versions throws VALIDATION_FAILED when list is empty")
+    void deleteMultipleVersionsEmptyList() {
+        UUID templateId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> templateService.deleteVersions(tenantId, templateId, List.of()))
+                .isInstanceOf(NotifyException.class)
+                .satisfies(ex -> assertThat(((NotifyException) ex).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+    }
+
+    @Test
+    @DisplayName("Bulk delete versions throws VALIDATION_FAILED when any version is referenced by notifications")
+    void deleteMultipleVersionsReferencedByNotifications() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Templ", Channel.IN_APP, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity v1 = new TemplateVersionEntity(
+                tenantId, templateId, 1, TemplateVersionStatus.PUBLISHED, null, "v1 body", ContentType.TEXT, List.of()
+        );
+        UUID v1Id = UUID.randomUUID();
+        v1.setId(v1Id);
+
+        TemplateVersionEntity v2 = new TemplateVersionEntity(
+                tenantId, templateId, 2, TemplateVersionStatus.DRAFT, null, "v2 body", ContentType.TEXT, List.of()
+        );
+        UUID v2Id = UUID.randomUUID();
+        v2.setId(v2Id);
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumberIn(tenantId, templateId, List.of(1, 2)))
+                .thenReturn(List.of(v1, v2));
+        when(templateVersionRepository.countNotificationsReferencingVersion(tenantId, v1Id)).thenReturn(2L);
+        when(templateVersionRepository.countNotificationsReferencingVersion(tenantId, v2Id)).thenReturn(0L);
+
+        assertThatThrownBy(() -> templateService.deleteVersions(tenantId, templateId, List.of(1, 2)))
+                .isInstanceOf(NotifyException.class)
+                .satisfies(ex -> {
+                    assertThat(((NotifyException) ex).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                    assertThat(ex.getMessage()).contains("referenced by 2 notification(s)");
+                });
+
+        verify(templateVersionRepository, never()).deleteAll(any());
+    }
 }

@@ -205,3 +205,31 @@ export async function getVersionDirect(versionId: string): Promise<TemplateVersi
   }
   return res.json();
 }
+
+export interface DeleteVersionsResponse {
+  templateId: string;
+  deletedVersions: number[];
+  count: number;
+}
+
+export async function deleteTemplateVersion(templateId: string, versionNumber: number): Promise<void> {
+  const res = await apiFetch(`/api/v1/templates/${templateId}/versions/${versionNumber}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: `Failed to delete template version v${versionNumber}` }));
+    throw new Error(error.detail || error.message || `Failed to delete template version v${versionNumber}`);
+  }
+}
+
+export async function deleteTemplateVersions(templateId: string, versionNumbers: number[]): Promise<DeleteVersionsResponse> {
+  const res = await apiFetch(`/api/v1/templates/${templateId}/versions/delete`, {
+    method: 'POST',
+    body: JSON.stringify({ versionNumbers }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to delete template versions' }));
+    throw new Error(error.detail || error.message || 'Failed to delete template versions');
+  }
+  return res.json();
+}

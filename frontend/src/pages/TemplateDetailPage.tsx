@@ -6,6 +6,8 @@ import {
   createDraftVersion,
   updateDraftVersion,
   publishVersion,
+  deleteTemplateVersion,
+  deleteTemplateVersions,
   type TemplateDetail,
   type TemplateVersion,
   type TemplateContentType,
@@ -27,6 +29,7 @@ import {
   Clock,
   Sparkles,
   X,
+  Trash2,
 } from 'lucide-react';
 
 export default function TemplateDetailPage() {
@@ -65,6 +68,13 @@ export default function TemplateDetailPage() {
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [createVersionError, setCreateVersionError] = useState<string | null>(null);
 
+  // Delete Version Modal & Selection State
+  const [selectedVersionNumbers, setSelectedVersionNumbers] = useState<number[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [versionsToDelete, setVersionsToDelete] = useState<number[]>([]);
+  const [deletingVersion, setDeletingVersion] = useState(false);
+  const [deleteVersionError, setDeleteVersionError] = useState<string | null>(null);
+
   const fetchTemplateDetail = async (templateId: string, preferredVersionNumber?: number) => {
     try {
       setLoading(true);
@@ -73,12 +83,18 @@ export default function TemplateDetailPage() {
       setTemplate(data);
 
       const targetVersionNum =
-        preferredVersionNumber ??
-        data.versions.find((v) => v.status === 'PUBLISHED')?.versionNumber ??
-        (data.versions.length > 0 ? data.versions[0].versionNumber : null);
+        preferredVersionNumber !== undefined
+          ? preferredVersionNumber
+          : (data.versions.find((v) => v.status === 'PUBLISHED')?.versionNumber ??
+             (data.versions.length > 0 ? data.versions[0].versionNumber : null));
 
-      if (targetVersionNum !== null) {
+      if (targetVersionNum !== null && targetVersionNum !== undefined) {
         selectVersion(data, targetVersionNum);
+      } else {
+        setActiveVersionNumber(null);
+        setSubject('');
+        setBody('');
+        setPreviewVariables({});
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load template');
@@ -162,12 +178,14 @@ export default function TemplateDetailPage() {
   };
 
   const openNewVersionModal = (preferredSourceVer?: number) => {
-    const srcNum = preferredSourceVer ?? activeVersionNumber ?? (template?.versions.length ? template.versions[0].versionNumber : 1);
-    const srcVer = template?.versions.find(v => v.versionNumber === srcNum);
+    const hasVersions = template?.versions && template.versions.length > 0;
+    const defaultSource = hasVersions ? template!.versions[0].versionNumber : 'blank';
+    const srcNum = preferredSourceVer ?? (activeVersionNumber !== null ? activeVersionNumber : defaultSource);
+    const srcVer = typeof srcNum === 'number' ? template?.versions.find(v => v.versionNumber === srcNum) : undefined;
     setNewVersionCloneSource(srcNum);
 
     // If cloning from the active version, prioritize the current editor state so in-progress inputs are preserved!
-    if (srcNum === activeVersionNumber) {
+    if (typeof srcNum === 'number' && srcNum === activeVersionNumber && activeVersionNumber !== null) {
       setNewVersionSubject(subject);
       setNewVersionBody(body);
       setNewVersionContentType(contentType);
@@ -183,6 +201,62 @@ export default function TemplateDetailPage() {
 
     setCreateVersionError(null);
     setShowNewVersionModal(true);
+  };
+
+  const handleToggleSelectAll = () => {
+    if (!template) return;
+    if (selectedVersionNumbers.length === template.versions.length) {
+      setSelectedVersionNumbers([]);
+    } else {
+      setSelectedVersionNumbers(template.versions.map((v) => v.versionNumber));
+    }
+  };
+
+  const toggleSelectVersion = (verNum: number) => {
+    setSelectedVersionNumbers((prev) =>
+      prev.includes(verNum) ? prev.filter((n) => n !== verNum) : [...prev, verNum]
+    );
+  };
+
+  const openDeleteConfirmModal = (verNums: number[]) => {
+    setVersionsToDelete(verNums);
+    setDeleteVersionError(null);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteSubmit = async () => {
+    if (!id || versionsToDelete.length === 0 || isSuspended) return;
+
+    try {
+      setDeletingVersion(true);
+      setDeleteVersionError(null);
+
+      if (versionsToDelete.length === 1) {
+        await deleteTemplateVersion(id, versionsToDelete[0]);
+      } else {
+        await deleteTemplateVersions(id, versionsToDelete);
+      }
+
+      // Deselect deleted versions
+      setSelectedVersionNumbers((prev) => prev.filter((n) => !versionsToDelete.includes(n)));
+
+      // If active version was deleted, find next fallback version
+      let nextVerNum: number | undefined = activeVersionNumber ?? undefined;
+      if (activeVersionNumber && versionsToDelete.includes(activeVersionNumber)) {
+        const remaining = (template?.versions || []).filter(
+          (v) => !versionsToDelete.includes(v.versionNumber)
+        );
+        const pub = remaining.find((v) => v.status === 'PUBLISHED');
+        nextVerNum = pub?.versionNumber ?? (remaining.length > 0 ? remaining[0].versionNumber : undefined);
+      }
+
+      setShowDeleteModal(false);
+      await fetchTemplateDetail(id, nextVerNum);
+    } catch (err: any) {
+      setDeleteVersionError(err.message || 'Failed to delete template version(s)');
+    } finally {
+      setDeletingVersion(false);
+    }
   };
 
   const handleCloneSourceChange = (val: string) => {
@@ -384,70 +458,156 @@ export default function TemplateDetailPage() {
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {template.versions.map((ver) => {
-              const isActive = ver.versionNumber === activeVersionNumber;
-              const isPub = ver.status === 'PUBLISHED';
-              const isArch = ver.status === 'ARCHIVED';
+          {template.versions.length === 0 ? (
+            <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--color-ink-2)', fontSize: 12 }}>
+              No versions in this template.
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '2px 4px', fontSize: 11, color: 'var(--color-ink-2)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedVersionNumbers.length === template.versions.length && template.versions.length > 0}
+                    onChange={handleToggleSelectAll}
+                    style={{ cursor: 'pointer', margin: 0 }}
+                    aria-label="Select all versions"
+                  />
+                  <span>Select All</span>
+                </label>
+                {selectedVersionNumbers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openDeleteConfirmModal(selectedVersionNumbers)}
+                    disabled={isSuspended}
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      color: 'var(--color-st-failed)',
+                      borderColor: 'var(--color-st-failed)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Trash2 size={11} />
+                    Delete ({selectedVersionNumbers.length})
+                  </button>
+                )}
+              </div>
 
-              return (
-                <button
-                  key={ver.id}
-                  type="button"
-                  onClick={() => handleSelectVersion(ver.versionNumber)}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-control)',
-                    border: isActive
-                      ? '1px solid var(--color-signal)'
-                      : '1px solid var(--color-rail)',
-                    backgroundColor: isActive
-                      ? 'var(--color-st-processing-bg)'
-                      : 'var(--color-paper)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    transition: 'border-color 0.15s ease, background-color 0.15s ease',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: isActive ? 'var(--color-signal)' : 'var(--color-harbor)' }}>
-                        v{ver.versionNumber}
-                      </span>
-                      {ver.status === 'PUBLISHED' && (
-                        <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'var(--color-chalk)', color: 'var(--color-ink-2)' }}>
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      className={`chip ${
-                        isPub
-                          ? 'chip-delivered'
-                          : isArch
-                          ? 'chip-cancelled'
-                          : 'chip-retrying'
-                      }`}
-                      style={{ fontSize: 10, padding: '1px 6px' }}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {template.versions.map((ver) => {
+                  const isActive = ver.versionNumber === activeVersionNumber;
+                  const isPub = ver.status === 'PUBLISHED';
+                  const isArch = ver.status === 'ARCHIVED';
+                  const isSelected = selectedVersionNumbers.includes(ver.versionNumber);
+
+                  return (
+                    <div
+                      key={ver.id}
+                      onClick={() => handleSelectVersion(ver.versionNumber)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectVersion(ver.versionNumber);
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-control)',
+                        border: isActive
+                          ? '1px solid var(--color-signal)'
+                          : isSelected
+                          ? '1px solid var(--color-ink-2)'
+                          : '1px solid var(--color-rail)',
+                        backgroundColor: isActive
+                          ? 'var(--color-st-processing-bg)'
+                          : isSelected
+                          ? 'var(--color-chalk)'
+                          : 'var(--color-paper)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        width: '100%',
+                        transition: 'border-color 0.15s ease, background-color 0.15s ease',
+                        position: 'relative',
+                      }}
                     >
-                      {ver.status}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: 'var(--color-ink-2)' }}>
-                    <Clock size={11} />
-                    <span className="mono" style={{ fontSize: 10 }}>
-                      {new Date(ver.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectVersion(ver.versionNumber);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: 'pointer', margin: 0, flexShrink: 0 }}
+                        aria-label={`Select version ${ver.versionNumber}`}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: isActive ? 'var(--color-signal)' : 'var(--color-harbor)' }}>
+                              v{ver.versionNumber}
+                            </span>
+                            {ver.status === 'PUBLISHED' && (
+                              <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'var(--color-chalk)', color: 'var(--color-ink-2)' }}>
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className={`chip ${
+                              isPub
+                                ? 'chip-delivered'
+                                : isArch
+                                ? 'chip-cancelled'
+                                : 'chip-retrying'
+                            }`}
+                            style={{ fontSize: 10, padding: '1px 6px' }}
+                          >
+                            {ver.status}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: 'var(--color-ink-2)' }}>
+                          <Clock size={11} />
+                          <span className="mono" style={{ fontSize: 10 }}>
+                            {new Date(ver.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDeleteConfirmModal([ver.versionNumber]);
+                        }}
+                        disabled={isSuspended}
+                        className="btn btn-ghost"
+                        style={{
+                          padding: 4,
+                          color: 'var(--color-ink-2)',
+                          borderRadius: 'var(--radius-control)',
+                          flexShrink: 0,
+                        }}
+                        title={`Delete version v${ver.versionNumber}`}
+                        aria-label={`Delete version v${ver.versionNumber}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right Column: Editor & Live Preview */}
@@ -460,9 +620,11 @@ export default function TemplateDetailPage() {
                   <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: 'var(--color-harbor)', letterSpacing: '-0.02em' }}>
                     {template.name}
                   </h1>
-                  <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-signal)', padding: '2px 8px', borderRadius: 'var(--radius-control)', backgroundColor: 'var(--color-st-processing-bg)' }}>
-                    v{activeVersionNumber}
-                  </span>
+                  {activeVersionNumber !== null && (
+                    <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-signal)', padding: '2px 8px', borderRadius: 'var(--radius-control)', backgroundColor: 'var(--color-st-processing-bg)' }}>
+                      v{activeVersionNumber}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--color-ink-2)' }}>
                   <span>Template ID: <code className="mono" style={{ fontSize: 11, color: 'var(--color-harbor)' }}>{template.id}</code></span>
@@ -513,6 +675,27 @@ export default function TemplateDetailPage() {
                   >
                     <Plus size={13} />
                     New Draft from v{activeVersionNumber}
+                  </button>
+                )}
+
+                {activeVersion && (
+                  <button
+                    type="button"
+                    onClick={() => openDeleteConfirmModal([activeVersion.versionNumber])}
+                    disabled={isSuspended}
+                    className="btn btn-secondary"
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--color-st-failed)',
+                      borderColor: 'var(--color-rail)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}
+                    title={`Delete version v${activeVersion.versionNumber}`}
+                  >
+                    <Trash2 size={13} />
+                    Delete Version
                   </button>
                 )}
               </div>
@@ -584,7 +767,23 @@ export default function TemplateDetailPage() {
           </div>
 
           {/* Editor & Preview Tabs */}
-          <div className="panel" style={{ padding: 20 }}>
+          {!activeVersion ? (
+            <div className="panel" style={{ padding: 48, textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'var(--color-ink-2)', marginBottom: 16 }}>
+                This template has no versions. Create a draft version to start composing.
+              </p>
+              <button
+                type="button"
+                onClick={() => openNewVersionModal()}
+                disabled={isSuspended}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Plus size={14} /> Create Version
+              </button>
+            </div>
+          ) : (
+            <div className="panel" style={{ padding: 20 }}>
             {/* View Mode Switcher + Detected Variables */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
               <div
@@ -811,6 +1010,7 @@ export default function TemplateDetailPage() {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -988,6 +1188,132 @@ export default function TemplateDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Version Confirmation Modal */}
+      {showDeleteModal && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={() => !deletingVersion && setShowDeleteModal(false)}
+        >
+          <div
+            className="panel"
+            style={{
+              maxWidth: 460,
+              width: '100%',
+              padding: 24,
+              boxShadow: 'var(--shadow-lg)',
+              backgroundColor: 'var(--color-paper)',
+              borderRadius: 'var(--radius-card)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-st-failed)' }}>
+                <Trash2 size={18} />
+                <h3 id="delete-modal-title" style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>
+                  {versionsToDelete.length === 1
+                    ? `Delete Version v${versionsToDelete[0]}`
+                    : `Delete ${versionsToDelete.length} Versions`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !deletingVersion && setShowDeleteModal(false)}
+                className="btn btn-ghost"
+                style={{ padding: 4 }}
+                aria-label="Close dialog"
+                disabled={deletingVersion}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.5, marginBottom: 16 }}>
+              {versionsToDelete.length === 1
+                ? `Are you sure you want to permanently delete version v${versionsToDelete[0]}? This action cannot be undone.`
+                : `Are you sure you want to permanently delete the following ${versionsToDelete.length} versions: ${versionsToDelete.map(v => `v${v}`).join(', ')}? This action cannot be undone.`}
+            </p>
+
+            {versionsToDelete.some(v => template?.versions.find(tv => tv.versionNumber === v)?.status === 'PUBLISHED') && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--color-st-scheduled-bg)',
+                  border: '1px solid var(--color-st-scheduled)',
+                  borderRadius: 'var(--radius-control)',
+                  fontSize: 12,
+                  color: 'var(--color-st-scheduled)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Warning:</strong> One of the selected versions is currently <strong>PUBLISHED</strong>. Deleting it will leave this template without an active published version.
+                </span>
+              </div>
+            )}
+
+            {deleteVersionError && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--color-st-failed-bg)',
+                  border: '1px solid var(--color-st-failed)',
+                  borderRadius: 'var(--radius-control)',
+                  color: 'var(--color-st-failed)',
+                  fontSize: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                <span>{deleteVersionError}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="btn btn-secondary"
+                disabled={deletingVersion}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSubmit}
+                disabled={deletingVersion}
+                className="btn btn-primary"
+                style={{
+                  backgroundColor: 'var(--color-st-failed)',
+                  borderColor: 'var(--color-st-failed)',
+                  color: '#fff',
+                }}
+              >
+                {deletingVersion ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

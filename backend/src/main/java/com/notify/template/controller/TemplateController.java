@@ -165,6 +165,42 @@ public class TemplateController {
         return ResponseEntity.ok(templateService.getVersionDirect(tenantId, versionId));
     }
 
+    /**
+     * Delete a specific template version by versionNumber.
+     */
+    @DeleteMapping("/{id}/versions/{versionNumber}")
+    @PreAuthorize("hasRole('TENANT_OWNER') or hasAuthority('SCOPE_templates:write')")
+    public ResponseEntity<Void> deleteVersion(@PathVariable UUID id,
+                                              @PathVariable Integer versionNumber) {
+        UUID tenantId = getRequiredTenantId();
+        templateService.deleteVersion(tenantId, id, versionNumber);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Bulk delete multiple template versions at a time (POST).
+     */
+    @PostMapping("/{id}/versions/delete")
+    @PreAuthorize("hasRole('TENANT_OWNER') or hasAuthority('SCOPE_templates:write')")
+    public ResponseEntity<DeleteVersionsResponse> deleteVersionsPost(@PathVariable UUID id,
+                                                                     @Valid @RequestBody DeleteVersionsRequest request) {
+        UUID tenantId = getRequiredTenantId();
+        DeleteVersionsResponse response = templateService.deleteVersions(tenantId, id, request.versionNumbers());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Bulk delete multiple template versions at a time (DELETE).
+     */
+    @DeleteMapping("/{id}/versions")
+    @PreAuthorize("hasRole('TENANT_OWNER') or hasAuthority('SCOPE_templates:write')")
+    public ResponseEntity<DeleteVersionsResponse> deleteVersionsDelete(@PathVariable UUID id,
+                                                                       @Valid @RequestBody DeleteVersionsRequest request) {
+        UUID tenantId = getRequiredTenantId();
+        DeleteVersionsResponse response = templateService.deleteVersions(tenantId, id, request.versionNumbers());
+        return ResponseEntity.ok(response);
+    }
+
     private UUID getRequiredTenantId() {
         return TenantContext.get()
                 .map(TenantPrincipal::tenantId)

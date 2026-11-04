@@ -32,20 +32,6 @@ export default function LandingPage() {
 
           <nav className="landing-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Link
-              to="/demo"
-              className="landing-nav-link-secondary btn btn-ghost btn-sm"
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--color-ink-2)',
-                textDecoration: 'none',
-                gap: 6,
-              }}
-            >
-              <span className="live-dot" style={{ width: 6, height: 6 }} aria-hidden="true" />
-              <span>Live Demo</span>
-            </Link>
-            <Link
               to="/login"
               className="btn btn-ghost btn-sm"
               style={{
@@ -100,18 +86,6 @@ export default function LandingPage() {
                 }}
               >
                 Sign In
-              </Link>
-              <Link
-                to="/demo"
-                className="btn btn-ghost btn-lg"
-                style={{
-                  color: 'var(--color-signal)',
-                  textDecoration: 'none',
-                  gap: 6,
-                }}
-              >
-                <span>Open the live demo inbox</span>
-                <ArrowRight size={14} aria-hidden="true" />
               </Link>
             </div>
 
@@ -261,9 +235,6 @@ Trace: otel-trace-id=4bf92f3577b34da6a3ce929d0e0e4736`}
             <span>© 2026 Notify Platform. Built with Java 25, Spring Boot 4, and React.</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <Link to="/demo" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
-              Live Demo
-            </Link>
             <Link to="/login" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
               Sign In
             </Link>

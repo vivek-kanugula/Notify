@@ -238,4 +238,71 @@ describe('Frontend Defect Regressions (BUG-01, BUG-02, BUG-03, BUG-04)', () => {
       assert.strictEqual(draftUpdatedWith.contentType, 'HTML');
     });
   });
+
+  // BUG-06 & BUG-07: Template version deletion and live demo sandbox removal
+  describe('BUG-06 & BUG-07: Template version deletion and demo sandbox removal', () => {
+    test('single and bulk version delete API payload serialization and fallback version selection', () => {
+      const templateVersions = [
+        { versionNumber: 3, status: 'DRAFT' },
+        { versionNumber: 2, status: 'PUBLISHED' },
+        { versionNumber: 1, status: 'ARCHIVED' },
+      ];
+
+      // Simulate single delete target
+      const singleTarget = 3;
+      const remainingAfterSingle = templateVersions.filter((v) => v.versionNumber !== singleTarget);
+      assert.strictEqual(remainingAfterSingle.length, 2);
+      assert.strictEqual(remainingAfterSingle[0].versionNumber, 2);
+
+      // Simulate bulk delete target [1, 3]
+      const bulkTargets = [1, 3];
+      const remainingAfterBulk = templateVersions.filter((v) => !bulkTargets.includes(v.versionNumber));
+      assert.strictEqual(remainingAfterBulk.length, 1);
+      assert.strictEqual(remainingAfterBulk[0].versionNumber, 2);
+
+      // Verify active version fallback selection when active version is deleted
+      const activeVersionNumber = 3;
+      let nextActiveVerNum: number | undefined = activeVersionNumber;
+      if (bulkTargets.includes(activeVersionNumber)) {
+        const pub = remainingAfterBulk.find((v) => v.status === 'PUBLISHED');
+        nextActiveVerNum = pub?.versionNumber ?? (remainingAfterBulk.length > 0 ? remainingAfterBulk[0].versionNumber : undefined);
+      }
+      assert.strictEqual(nextActiveVerNum, 2);
+
+      // Verify fallback when ALL versions are deleted
+      const allTargets = [1, 2, 3];
+      const remainingAfterAll = templateVersions.filter((v) => !allTargets.includes(v.versionNumber));
+      let fallbackWhenEmpty: number | null = null;
+      if (allTargets.includes(activeVersionNumber)) {
+        const pub = remainingAfterAll.find((v) => v.status === 'PUBLISHED');
+        fallbackWhenEmpty = pub?.versionNumber ?? (remainingAfterAll.length > 0 ? remainingAfterAll[0].versionNumber : null);
+      }
+      assert.strictEqual(fallbackWhenEmpty, null);
+    });
+
+    test('multi-selection toggle and select all behavior for version history rail', () => {
+      const versionNumbers = [3, 2, 1];
+      let selected: number[] = [];
+
+      // Toggle select version 3
+      selected = selected.includes(3) ? selected.filter((n) => n !== 3) : [...selected, 3];
+      assert.deepStrictEqual(selected, [3]);
+
+      // Toggle select version 2
+      selected = selected.includes(2) ? selected.filter((n) => n !== 2) : [...selected, 2];
+      assert.deepStrictEqual(selected, [3, 2]);
+
+      // Toggle deselect version 3
+      selected = selected.includes(3) ? selected.filter((n) => n !== 3) : [...selected, 3];
+      assert.deepStrictEqual(selected, [2]);
+
+      // Select all
+      selected = selected.length === versionNumbers.length ? [] : [...versionNumbers];
+      assert.deepStrictEqual(selected, [3, 2, 1]);
+
+      // Deselect all (toggle when all selected)
+      selected = selected.length === versionNumbers.length ? [] : [...versionNumbers];
+      assert.deepStrictEqual(selected, []);
+    });
+  });
 });

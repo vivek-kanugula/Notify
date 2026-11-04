@@ -26,4 +26,9 @@ public interface TemplateVersionRepository extends JpaRepository<TemplateVersion
 
     @Query("SELECT MAX(v.versionNumber) FROM TemplateVersionEntity v WHERE v.templateId = :templateId")
     Optional<Integer> findMaxVersionNumberByTemplateId(@Param("templateId") UUID templateId);
+
+    List<TemplateVersionEntity> findByTenantIdAndTemplateIdAndVersionNumberIn(UUID tenantId, UUID templateId, List<Integer> versionNumbers);
+
+    @Query(value = "SELECT COUNT(*) FROM notifications WHERE tenant_id = :tenantId AND template_version_id = :versionId", nativeQuery = true)
+    long countNotificationsReferencingVersion(@Param("tenantId") UUID tenantId, @Param("versionId") UUID versionId);
 }

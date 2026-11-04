@@ -479,4 +479,69 @@ class TemplateIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Scoped Template"));
     }
+
+    @Test
+    @DisplayName("Single and bulk deletion of template versions")
+    void deleteTemplateVersionSingleAndBulk() throws Exception {
+        TenantFixture tenant = createTenant("DeleteVerTenant");
+
+        // 1. Create template with initial draft version 1
+        CreateTemplateRequest createReq = new CreateTemplateRequest(
+                "Delete Test Template", Channel.IN_APP, "Test description", null,
+                "Hello {{name}}", ContentType.TEXT
+        );
+
+        String createJson = mockMvc.perform(post("/api/v1/templates")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createReq)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID templateId = UUID.fromString(objectMapper.readTree(createJson).get("id").asText());
+
+        // 2. Create version 2 and version 3 drafts
+        CreateVersionRequest v2Req = new CreateVersionRequest(1, null, "Hello v2 {{name}}", null);
+        mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(v2Req)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(2));
+
+        CreateVersionRequest v3Req = new CreateVersionRequest(2, null, "Hello v3 {{name}}", null);
+        mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(v3Req)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(3));
+
+        // 3. Delete version 2 single
+        mockMvc.perform(delete("/api/v1/templates/" + templateId + "/versions/2")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isNoContent());
+
+        // 4. Verify version 2 is 404
+        mockMvc.perform(get("/api/v1/templates/" + templateId + "/versions/2")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isNotFound());
+
+        // 5. Bulk delete version 1 and version 3
+        DeleteVersionsRequest bulkDeleteReq = new DeleteVersionsRequest(List.of(1, 3));
+        mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions/delete")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bulkDeleteReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(2))
+                .andExpect(jsonPath("$.deletedVersions[0]").value(1))
+                .andExpect(jsonPath("$.deletedVersions[1]").value(3));
+
+        // 6. List versions is now empty
+        mockMvc.perform(get("/api/v1/templates/" + templateId + "/versions")
+                        .header("Authorization", "Bearer " + tenant.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
 }

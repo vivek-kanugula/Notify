@@ -415,6 +415,88 @@ public class TemplateService {
     }
 
     /**
+     * Deletes a specific template version by version number.
+     * Prevents deletion if the version is referenced by existing notifications.
+     */
+    @Transactional
+    public void deleteVersion(UUID tenantId, UUID templateId, Integer versionNumber) {
+        checkTenantAccess(tenantId, true);
+
+        TemplateEntity template = templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)
+                .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND, "Template not found: " + templateId));
+
+        if (template.getDeletedAt() != null) {
+            throw new NotifyException(ErrorCode.NOT_FOUND, "Template not found: " + templateId);
+        }
+
+        TemplateVersionEntity version = templateVersionRepository
+                .findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, versionNumber)
+                .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND, "Template version not found: " + versionNumber));
+
+        long refCount = templateVersionRepository.countNotificationsReferencingVersion(tenantId, version.getId());
+        if (refCount > 0) {
+            throw new NotifyException(ErrorCode.VALIDATION_FAILED,
+                    "Cannot delete template version v" + versionNumber + " as it is referenced by " + refCount + " notification(s)");
+        }
+
+        templateVersionRepository.delete(version);
+        templateVersionRepository.flush();
+
+        Instant now = Instant.now(clock);
+        template.setUpdatedAt(now);
+        templateRepository.save(template);
+    }
+
+    /**
+     * Bulk deletes multiple template versions by version numbers.
+     * Prevents deletion if any of the versions is referenced by existing notifications.
+     */
+    @Transactional
+    public DeleteVersionsResponse deleteVersions(UUID tenantId, UUID templateId, List<Integer> versionNumbers) {
+        checkTenantAccess(tenantId, true);
+
+        if (versionNumbers == null || versionNumbers.isEmpty()) {
+            throw new NotifyException(ErrorCode.VALIDATION_FAILED, "Version numbers list cannot be empty");
+        }
+
+        TemplateEntity template = templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)
+                .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND, "Template not found: " + templateId));
+
+        if (template.getDeletedAt() != null) {
+            throw new NotifyException(ErrorCode.NOT_FOUND, "Template not found: " + templateId);
+        }
+
+        List<TemplateVersionEntity> versions = templateVersionRepository
+                .findByTenantIdAndTemplateIdAndVersionNumberIn(tenantId, templateId, versionNumbers);
+
+        if (versions.isEmpty()) {
+            throw new NotifyException(ErrorCode.NOT_FOUND, "No matching template versions found to delete");
+        }
+
+        for (TemplateVersionEntity ver : versions) {
+            long refCount = templateVersionRepository.countNotificationsReferencingVersion(tenantId, ver.getId());
+            if (refCount > 0) {
+                throw new NotifyException(ErrorCode.VALIDATION_FAILED,
+                        "Cannot delete template version v" + ver.getVersionNumber() + " as it is referenced by " + refCount + " notification(s)");
+            }
+        }
+
+        List<Integer> deletedVersionNumbers = versions.stream()
+                .map(TemplateVersionEntity::getVersionNumber)
+                .sorted()
+                .collect(Collectors.toList());
+
+        templateVersionRepository.deleteAll(versions);
+        templateVersionRepository.flush();
+
+        Instant now = Instant.now(clock);
+        template.setUpdatedAt(now);
+        templateRepository.save(template);
+
+        return new DeleteVersionsResponse(templateId, deletedVersionNumbers, deletedVersionNumbers.size());
+    }
+
+    /**
      * Reads a specific template version by templateId and versionNumber.
      * Allowed even if parent template is soft-deleted (for historical notifications),
      * while preserving strict tenant isolation.
