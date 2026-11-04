@@ -4,6 +4,7 @@ import {
   computeLifecycleStages,
   computeCompactSegments,
   type RailStageName,
+  type StageState,
 } from './lifecycleRailLogic';
 import {
   CalendarClock,
@@ -31,6 +32,16 @@ export interface LifecycleRailProps {
   onClickStage?: (stage: RailStageName) => void;
   className?: string;
   style?: React.CSSProperties;
+}
+
+export function getStageIcon(stageName: RailStageName, state: StageState, size = 14) {
+  if (state === 'done') {
+    return <Check size={size} aria-hidden="true" strokeWidth={2.5} />;
+  }
+  if (state === 'upcoming' && stageName === 'PROCESSING') {
+    return <Loader2 size={size} aria-hidden="true" />;
+  }
+  return getStatusIcon(stageName, size);
 }
 
 export function getStatusIcon(status: NotificationStatus | RailStageName, size = 14) {
@@ -302,16 +313,34 @@ export const LifecycleRail: React.FC<LifecycleRailProps> = ({
                     borderRadius: '50%',
                     display: 'grid',
                     placeItems: 'center',
-                    backgroundColor: isDone || isCurrent ? colors.bg : isSkipped ? 'var(--color-chalk)' : 'var(--color-paper)',
-                    color: isDone || isCurrent ? colors.text : 'var(--color-rail)',
-                    border: `2px ${isSkipped ? 'dashed' : 'solid'} ${isDone || isCurrent ? colors.text : 'var(--color-rail)'}`,
-                    boxShadow: isCurrent ? `0 0 0 3px ${colors.bg}` : 'none',
+                    backgroundColor: isCurrent
+                      ? colors.bg
+                      : isDone
+                      ? 'var(--color-st-delivered-bg)'
+                      : isSkipped
+                      ? 'var(--color-chalk)'
+                      : 'var(--color-paper)',
+                    color: isCurrent
+                      ? colors.text
+                      : isDone
+                      ? 'var(--color-st-delivered)'
+                      : 'var(--color-rail)',
+                    border: `2px ${isSkipped ? 'dashed' : 'solid'} ${
+                      isCurrent
+                        ? colors.text
+                        : isDone
+                        ? 'var(--color-st-delivered)'
+                        : 'var(--color-rail)'
+                    }`,
+                    boxShadow: isCurrent
+                      ? `0 0 0 4px ${colors.bg}, 0 0 12px ${colors.bg}`
+                      : 'none',
                     transition: 'all 0.2s ease-out',
                     position: 'relative',
                   }}
                   className={isCurrent ? 'pulse-node' : ''}
                 >
-                  {getStatusIcon(stage.name, 16)}
+                  {getStageIcon(stage.name, stage.state, 16)}
                   {isDlq && (
                     <span
                       title="Dead-Letter Terminal Cap"
@@ -333,7 +362,11 @@ export const LifecycleRail: React.FC<LifecycleRailProps> = ({
                   style={{
                     fontSize: 13,
                     fontWeight: isCurrent ? 700 : 600,
-                    color: isUpcoming || isSkipped ? 'var(--color-ink-2)' : colors.text,
+                    color: isCurrent
+                      ? colors.text
+                      : isDone
+                      ? 'var(--color-ink-1)'
+                      : 'var(--color-ink-3)',
                     marginTop: 8,
                     textAlign: 'center',
                     textDecoration: isSkipped ? 'line-through' : 'none',
@@ -365,7 +398,7 @@ export const LifecycleRail: React.FC<LifecycleRailProps> = ({
                     minWidth: 40,
                     height: 2,
                     marginTop: 15,
-                    backgroundColor: isDone ? colors.text : 'var(--color-rail)',
+                    backgroundColor: isDone ? 'var(--color-st-delivered)' : 'var(--color-rail)',
                     position: 'relative',
                   }}
                 >

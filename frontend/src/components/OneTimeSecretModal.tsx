@@ -34,7 +34,7 @@ export const OneTimeSecretModal: React.FC<OneTimeSecretModalProps> = ({
   };
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-overlay modal-backdrop">
       <div className="modal-card" style={{ maxWidth: 480 }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

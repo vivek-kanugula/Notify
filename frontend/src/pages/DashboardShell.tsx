@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Routes, Route, Link } from 'react-router-dom';
+import { NavLink, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getUsageSummary, getUsageTimeseries, type UsageSummary, type UsageTimeseries } from '../api/usage';
 import { listNotifications, type NotificationSummary } from '../api/notifications';
 import ApiKeysPage from './ApiKeysPage';
 import NotificationsPage from './NotificationsPage';
-import CreateNotificationPage from './CreateNotificationPage';
 import NotificationDetailPage from './NotificationDetailPage';
 import TemplatesPage from './TemplatesPage';
 import TemplateDetailPage from './TemplateDetailPage';
@@ -33,12 +32,6 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
-
-interface HealthState {
-  liveness: string;
-  readiness: string;
-  loading: boolean;
-}
 
 function OverviewContent() {
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
@@ -128,7 +121,7 @@ function OverviewContent() {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Link
-            to="/app/notifications/new"
+            to="/app/notifications?create=true"
             className="btn btn-primary"
             style={{
               textDecoration: 'none',
@@ -189,7 +182,7 @@ function OverviewContent() {
                 Create API Key
               </Link>
               <Link
-                to="/app/notifications/new"
+                to="/app/notifications?create=true"
                 className="btn btn-secondary"
                 style={{ textDecoration: 'none' }}
               >
@@ -355,39 +348,6 @@ function OverviewContent() {
  */
 export default function DashboardShell() {
   const { user, logout } = useAuth();
-  const [health, setHealth] = useState<HealthState>({
-    liveness: 'UNKNOWN',
-    readiness: 'UNKNOWN',
-    loading: true
-  });
-
-  useEffect(() => {
-    async function checkHealth() {
-      try {
-        const liveRes = await fetch('/actuator/health/liveness');
-        const liveData = liveRes.ok ? await liveRes.json() : { status: 'DOWN' };
-
-        const readyRes = await fetch('/actuator/health/readiness');
-        const readyData = readyRes.ok ? await readyRes.json() : { status: 'DOWN' };
-
-        setHealth({
-          liveness: liveData.status || 'DOWN',
-          readiness: readyData.status || 'DOWN',
-          loading: false
-        });
-      } catch {
-        setHealth({
-          liveness: 'OFFLINE',
-          readiness: 'OFFLINE',
-          loading: false
-        });
-      }
-    }
-
-    checkHealth();
-    const timer = setInterval(checkHealth, 15000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <div className="app-shell">
@@ -523,18 +483,6 @@ export default function DashboardShell() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-              <span style={{ color: 'var(--color-ink-3)', fontWeight: 500 }}>Backend:</span>
-              <span className={`status-chip ${health.liveness === 'UP' ? 'status-delivered' : 'status-failed'}`} style={{ padding: '2px 6px', fontSize: 10 }}>
-                Live: {health.liveness}
-              </span>
-              <span className={`status-chip ${health.readiness === 'UP' ? 'status-delivered' : 'status-failed'}`} style={{ padding: '2px 6px', fontSize: 10 }}>
-                Ready: {health.readiness}
-              </span>
-            </div>
-            <div className="badge-mono" style={{ fontSize: 11, padding: '3px 8px' }}>
-              UTC Clock: Injected
-            </div>
             <ThemeToggle />
           </div>
         </header>
@@ -544,7 +492,7 @@ export default function DashboardShell() {
           <Routes>
             <Route index element={<OverviewContent />} />
             <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="notifications/new" element={<CreateNotificationPage />} />
+            <Route path="notifications/new" element={<Navigate to="/app/notifications?create=true" replace />} />
             <Route path="notifications/:id" element={<NotificationDetailPage />} />
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="templates/:id" element={<TemplateDetailPage />} />

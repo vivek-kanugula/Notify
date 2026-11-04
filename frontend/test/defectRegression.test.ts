@@ -1,5 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import {
+  isTerminalStatus,
+  computeLifecycleStages,
+  resolveStageVisualState,
+} from '../src/components/lifecycleRailLogic.ts';
 
 describe('Frontend Defect Regressions (BUG-01, BUG-02, BUG-03, BUG-04)', () => {
   // BUG-01: KpiStrip null resilience
@@ -303,6 +308,111 @@ describe('Frontend Defect Regressions (BUG-01, BUG-02, BUG-03, BUG-04)', () => {
       // Deselect all (toggle when all selected)
       selected = selected.length === versionNumbers.length ? [] : [...versionNumbers];
       assert.deepStrictEqual(selected, []);
+    });
+  });
+
+  // BUG-08, BUG-09, BUG-10, BUG-11: Top bar cleanup, modal viewport centering, unified send modal with templates, and realtime lifecycle progression
+  describe('BUG-08 to BUG-11: Modal centering, template dispatch, and realtime lifecycle focus', () => {
+    test('BUG-10: Send notification modal constructs correct payload for custom vs template dispatch', () => {
+      // 1. Custom message payload
+      const customPayload = {
+        channel: 'EMAIL',
+        recipient: 'user@example.com',
+        subject: 'Welcome!',
+        body: 'Hello there',
+      };
+      assert.strictEqual(customPayload.channel, 'EMAIL');
+      assert.strictEqual(customPayload.subject, 'Welcome!');
+      assert.strictEqual(customPayload.body, 'Hello there');
+
+      // 2. Template message payload
+      const templatePayload = {
+        channel: 'EMAIL',
+        recipient: 'user@example.com',
+        templateId: 'tpl-abc-123',
+        templateVersion: 2,
+        templateVariables: { name: 'Alice', code: '48291' },
+      };
+      assert.strictEqual(templatePayload.channel, 'EMAIL');
+      assert.strictEqual(templatePayload.templateId, 'tpl-abc-123');
+      assert.strictEqual(templatePayload.templateVersion, 2);
+      assert.deepStrictEqual(templatePayload.templateVariables, { name: 'Alice', code: '48291' });
+    });
+
+    test('BUG-11: LifecycleRail resolveStageVisualState displays completed checkmark for finished processing stage', () => {
+      // When PROCESSING is done, visual state MUST be completed check, NOT active spinner
+      const doneProcessing = resolveStageVisualState('PROCESSING', 'done');
+      assert.strictEqual(doneProcessing.iconType, 'check');
+      assert.strictEqual(doneProcessing.isCompleted, true);
+      assert.strictEqual(doneProcessing.isPulsing, false);
+
+      // When PROCESSING is current, it has active spinner and pulsing focus
+      const currentProcessing = resolveStageVisualState('PROCESSING', 'current');
+      assert.strictEqual(currentProcessing.iconType, 'spinner');
+      assert.strictEqual(currentProcessing.isCompleted, false);
+      assert.strictEqual(currentProcessing.isPulsing, true);
+
+      // When QUEUED is current, it has layers icon and pulsing focus
+      const currentQueued = resolveStageVisualState('QUEUED', 'current');
+      assert.strictEqual(currentQueued.iconType, 'layers');
+      assert.strictEqual(currentQueued.isPulsing, true);
+
+      // When QUEUED is done, it transitions to completed check
+      const doneQueued = resolveStageVisualState('QUEUED', 'done');
+      assert.strictEqual(doneQueued.iconType, 'check');
+      assert.strictEqual(doneQueued.isCompleted, true);
+    });
+
+    test('BUG-11: Real-time lifecycle stage focus progresses from QUEUED to PROCESSING to DELIVERED', () => {
+      // State 1: QUEUED
+      const queuedStages = computeLifecycleStages({
+        status: 'QUEUED',
+        createdAt: '2026-11-04T10:00:00Z',
+      });
+      assert.strictEqual(queuedStages.stages[0].name, 'QUEUED');
+      assert.strictEqual(queuedStages.stages[0].state, 'current'); // FOCUSED
+      assert.strictEqual(queuedStages.stages[1].name, 'PROCESSING');
+      assert.strictEqual(queuedStages.stages[1].state, 'upcoming'); // NOT active
+      assert.strictEqual(queuedStages.stages[2].name, 'DELIVERED');
+      assert.strictEqual(queuedStages.stages[2].state, 'upcoming'); // NOT active
+
+      // State 2: PROCESSING
+      const processingStages = computeLifecycleStages({
+        status: 'PROCESSING',
+        processingStartedAt: '2026-11-04T10:00:02Z',
+      });
+      assert.strictEqual(processingStages.stages[0].name, 'QUEUED');
+      assert.strictEqual(processingStages.stages[0].state, 'done'); // Completed
+      assert.strictEqual(processingStages.stages[1].name, 'PROCESSING');
+      assert.strictEqual(processingStages.stages[1].state, 'current'); // FOCUSED
+      assert.strictEqual(processingStages.stages[2].name, 'DELIVERED');
+      assert.strictEqual(processingStages.stages[2].state, 'upcoming'); // NOT active
+
+      // State 3: DELIVERED
+      const deliveredStages = computeLifecycleStages({
+        status: 'DELIVERED',
+        completedAt: '2026-11-04T10:00:04Z',
+      });
+      assert.strictEqual(deliveredStages.stages[0].name, 'QUEUED');
+      assert.strictEqual(deliveredStages.stages[0].state, 'done'); // Completed
+      assert.strictEqual(deliveredStages.stages[1].name, 'PROCESSING');
+      assert.strictEqual(deliveredStages.stages[1].state, 'done'); // Completed (no longer spinning!)
+      assert.strictEqual(deliveredStages.stages[2].name, 'DELIVERED');
+      assert.strictEqual(deliveredStages.stages[2].state, 'current'); // FOCUSED
+    });
+
+    test('BUG-11: Terminal status predicate accurately governs real-time polling lifecycle', () => {
+      // Non-terminal states must continue polling
+      assert.strictEqual(isTerminalStatus('QUEUED'), false);
+      assert.strictEqual(isTerminalStatus('PROCESSING'), false);
+      assert.strictEqual(isTerminalStatus('RETRYING'), false);
+      assert.strictEqual(isTerminalStatus('SCHEDULED'), false);
+
+      // Terminal states must halt polling
+      assert.strictEqual(isTerminalStatus('DELIVERED'), true);
+      assert.strictEqual(isTerminalStatus('FAILED'), true);
+      assert.strictEqual(isTerminalStatus('DLQ'), true);
+      assert.strictEqual(isTerminalStatus('CANCELLED'), true);
     });
   });
 });

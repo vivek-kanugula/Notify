@@ -532,7 +532,7 @@ func VerifySignature(payload []byte, headerSig string, secret []byte) bool {
 
       {/* Rotate Confirmation Modal */}
       {showRotateConfirm && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>

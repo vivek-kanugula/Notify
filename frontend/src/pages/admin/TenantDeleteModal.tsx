@@ -55,7 +55,7 @@ export default function TenantDeleteModal({
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div className="modal-overlay modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
       <div className="modal-card" style={{ maxWidth: 480 }}>
         {/* Header */}
         <div className="modal-header">

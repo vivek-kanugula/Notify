@@ -8,6 +8,7 @@ import {
   type NotificationHistoryEntry,
 } from '../api/notifications';
 import LifecycleRail, { getStatusIcon } from '../components/LifecycleRail';
+import { isTerminalStatus } from '../components/lifecycleRailLogic';
 import SandboxedIframe from '../components/SandboxedIframe';
 import { getChannelIcon } from '../components/FilterBar';
 import {
@@ -58,6 +59,26 @@ export default function NotificationDetailPage() {
       fetchDetailAndHistory(id);
     }
   }, [id]);
+
+  // Real-time polling while notification is non-terminal (QUEUED, PROCESSING, RETRYING, SCHEDULED)
+  useEffect(() => {
+    if (!id || !detail || isTerminalStatus(detail.status)) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const [freshDetail, freshHistory] = await Promise.all([
+          getNotification(id),
+          getNotificationHistory(id),
+        ]);
+        setDetail(freshDetail);
+        setHistory(freshHistory);
+      } catch {
+        // Silent catch for background poll
+      }
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, [id, detail?.status]);
 
   const copyToClipboard = async (text: string, keyName: string) => {
     try {

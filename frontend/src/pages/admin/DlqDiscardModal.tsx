@@ -64,7 +64,7 @@ export default function DlqDiscardModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="discard-modal-title"
-      className="modal-backdrop"
+      className="modal-overlay modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget && !submitting) onClose();
       }}

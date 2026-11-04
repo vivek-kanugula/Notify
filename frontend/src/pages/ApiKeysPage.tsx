@@ -472,7 +472,7 @@ export default function ApiKeysPage() {
 
       {/* CREATE KEY MODAL */}
       {showCreateModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 520 }}>
             <div className="modal-header">
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>
@@ -641,7 +641,7 @@ export default function ApiKeysPage() {
 
       {/* ROTATE CONFIRM MODAL */}
       {keyToRotate && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>
@@ -731,7 +731,7 @@ export default function ApiKeysPage() {
 
       {/* REVOKE CONFIRM MODAL */}
       {keyToRevoke && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-st-failed)' }}>

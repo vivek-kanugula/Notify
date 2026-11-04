@@ -1016,7 +1016,7 @@ export default function TemplateDetailPage() {
 
       {/* Publish Confirm Dialog */}
       {showPublishModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>
@@ -1066,7 +1066,7 @@ export default function TemplateDetailPage() {
 
       {/* Create New Version Dialog */}
       {showNewVersionModal && (
-        <div className="modal-backdrop">
+        <div className="modal-overlay modal-backdrop">
           <div className="modal-card" style={{ maxWidth: 540 }}>
             <form onSubmit={handleCreateVersionSubmit}>
               <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1195,7 +1195,7 @@ export default function TemplateDetailPage() {
       {/* Delete Version Confirmation Modal */}
       {showDeleteModal && (
         <div
-          className="modal-backdrop"
+          className="modal-overlay modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,

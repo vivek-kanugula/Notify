@@ -216,3 +216,31 @@ export function computeCompactSegments(status: NotificationStatus, attemptCount 
       return [queuedColor, railColor, railColor, railColor];
   }
 }
+
+/**
+ * Resolves visual state representation (icon type, completion flag, pulsing focus)
+ * for a lifecycle stage. Done stages ALWAYS resolve to completed check state, never active spinners.
+ */
+export function resolveStageVisualState(stageName: RailStageName, state: StageState): {
+  iconType: 'check' | 'spinner' | 'layers' | 'clock' | 'cross' | 'ban' | 'archive';
+  isPulsing: boolean;
+  isCompleted: boolean;
+} {
+  if (state === 'done') {
+    return { iconType: 'check', isPulsing: false, isCompleted: true };
+  }
+  if (state === 'current') {
+    let iconType: 'check' | 'spinner' | 'layers' | 'clock' | 'cross' | 'ban' | 'archive' = 'layers';
+    if (stageName === 'PROCESSING') iconType = 'spinner';
+    else if (stageName === 'DELIVERED') iconType = 'check';
+    else if (stageName === 'FAILED') iconType = 'cross';
+    else if (stageName === 'CANCELLED') iconType = 'ban';
+    else if (stageName === 'DLQ') iconType = 'archive';
+    else if (stageName === 'SCHEDULED') iconType = 'clock';
+    return { iconType, isPulsing: true, isCompleted: false };
+  }
+  let iconType: 'check' | 'spinner' | 'layers' | 'clock' | 'cross' | 'ban' | 'archive' = 'layers';
+  if (stageName === 'PROCESSING') iconType = 'spinner';
+  else if (stageName === 'DELIVERED') iconType = 'check';
+  return { iconType, isPulsing: false, isCompleted: false };
+}

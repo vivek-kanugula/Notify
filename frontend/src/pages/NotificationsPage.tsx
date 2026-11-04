@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   listNotifications,
@@ -14,6 +14,14 @@ import {
   type NotificationStatus,
   type CreateNotificationRequest,
 } from '../api/notifications';
+import {
+  listTemplates,
+  getTemplate,
+  type Template,
+  type TemplateDetail,
+  type TemplateVersion,
+} from '../api/templates';
+import { extractTemplateVariables, interpolateTemplateVariables } from '../components/templateVariableUtils';
 import LifecycleRail from '../components/LifecycleRail';
 import SandboxedIframe from '../components/SandboxedIframe';
 import FilterBar, { getChannelIcon } from '../components/FilterBar';
@@ -37,6 +45,7 @@ import {
 
 export default function NotificationsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Filters state from URL
@@ -68,10 +77,21 @@ export default function NotificationsPage() {
   // Quick Create form state (modal)
   const [formChannel, setFormChannel] = useState<Channel>('EMAIL');
   const [formRecipient, setFormRecipient] = useState('');
+  const [contentMode, setContentMode] = useState<'custom' | 'template'>('custom');
   const [formSubject, setFormSubject] = useState('');
   const [formBody, setFormBody] = useState('');
   const [formIdempotencyKey, setFormIdempotencyKey] = useState('');
   const [formScheduledAt, setFormScheduledAt] = useState('');
+
+  // Template state
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [templateDetail, setTemplateDetail] = useState<TemplateDetail | null>(null);
+  const [selectedVersionNumber, setSelectedVersionNumber] = useState<number | ''>('');
+  const [activeVersion, setActiveVersion] = useState<TemplateVersion | null>(null);
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+
   const [submitting, setSubmitting] = useState(false);
   const [createFeedback, setCreateFeedback] = useState<{ msg: string; isReplay: boolean; id: string } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -122,12 +142,115 @@ export default function NotificationsPage() {
     }
   };
 
+  // Open modal if ?create=true in URL
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setShowCreateModal(true);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('create');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Load templates when modal opens or channel changes
+  useEffect(() => {
+    if (!showCreateModal) return;
+    let mounted = true;
+    setTemplatesLoading(true);
+    listTemplates()
+      .then((data) => {
+        if (!mounted) return;
+        const matched = data.filter((t) => t.channel === formChannel);
+        setTemplates(matched);
+        if (selectedTemplateId && !matched.some((t) => t.id === selectedTemplateId)) {
+          setSelectedTemplateId('');
+          setTemplateDetail(null);
+          setActiveVersion(null);
+          setSelectedVersionNumber('');
+          setTemplateVariables({});
+        }
+      })
+      .catch(() => {
+        if (mounted) setTemplates([]);
+      })
+      .finally(() => {
+        if (mounted) setTemplatesLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [showCreateModal, formChannel, selectedTemplateId]);
+
+  // Load template details when selected template changes
+  useEffect(() => {
+    if (!selectedTemplateId) {
+      setTemplateDetail(null);
+      setActiveVersion(null);
+      setSelectedVersionNumber('');
+      setTemplateVariables({});
+      return;
+    }
+
+    let mounted = true;
+    getTemplate(selectedTemplateId)
+      .then((detail) => {
+        if (!mounted) return;
+        setTemplateDetail(detail);
+        const published = detail.versions.find((v) => v.status === 'PUBLISHED');
+        const defaultVer = published || detail.versions[0];
+        if (defaultVer) {
+          setSelectedVersionNumber(defaultVer.versionNumber);
+          setActiveVersion(defaultVer);
+          const vars = defaultVer.variables || extractTemplateVariables(defaultVer.subject, defaultVer.body);
+          const initialMap: Record<string, string> = {};
+          for (const v of vars) {
+            initialMap[v] = '';
+          }
+          setTemplateVariables(initialMap);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setTemplateDetail(null);
+          setActiveVersion(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedTemplateId]);
+
+  const handleVersionChange = (verNum: number) => {
+    setSelectedVersionNumber(verNum);
+    if (!templateDetail) return;
+    const v = templateDetail.versions.find((item) => item.versionNumber === verNum);
+    if (v) {
+      setActiveVersion(v);
+      const vars = v.variables || extractTemplateVariables(v.subject, v.body);
+      const newMap: Record<string, string> = {};
+      for (const key of vars) {
+        newMap[key] = templateVariables[key] || '';
+      }
+      setTemplateVariables(newMap);
+    }
+  };
+
+  // Preview content for template mode
+  const previewSubject = activeVersion
+    ? interpolateTemplateVariables(activeVersion.subject || '', templateVariables)
+    : '';
+  const previewBody = activeVersion
+    ? interpolateTemplateVariables(activeVersion.body || '', templateVariables)
+    : '';
+
   // Initial fetch and on filter/page change
   useEffect(() => {
     fetchList();
   }, [filterState.channel, filterState.status, filterState.page, filterState.size]);
 
-  // Smart polling: poll every 5s if any non-terminal rows exist on active page
+  // Smart polling: poll every 2s in realtime if any non-terminal rows exist on active page
   const hasActiveNonTerminal = useMemo(() => {
     return notifications.some((n) => !isTerminalStatus(n.status));
   }, [notifications]);
@@ -137,7 +260,7 @@ export default function NotificationsPage() {
 
     const timer = setInterval(() => {
       fetchList(true);
-    }, 5000);
+    }, 2000);
 
     return () => clearInterval(timer);
   }, [hasActiveNonTerminal, filterState]);
@@ -189,34 +312,43 @@ export default function NotificationsPage() {
   // Quick Dispatch Form Submit
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formRecipient.trim() || !formBody.trim()) {
-      setCreateError('Recipient and body content are required');
+    setCreateError(null);
+    setCreateFeedback(null);
+
+    const trimmedRecipient = formRecipient.trim();
+    if (!trimmedRecipient) {
+      setCreateError('Recipient is required');
       return;
+    }
+
+    if (contentMode === 'custom') {
+      if (!formBody.trim()) {
+        setCreateError('Message body cannot be empty');
+        return;
+      }
+    } else {
+      if (!selectedTemplateId) {
+        setCreateError('Please select a template');
+        return;
+      }
     }
 
     try {
       setSubmitting(true);
-      setCreateError(null);
-      setCreateFeedback(null);
 
       const payload: CreateNotificationRequest = {
         channel: formChannel,
-        recipient: formRecipient.trim(),
-        subject: formChannel === 'EMAIL' ? formSubject.trim() || undefined : undefined,
-        body: formBody.trim(),
+        recipient: trimmedRecipient,
+        subject: formChannel === 'EMAIL' ? (contentMode === 'custom' ? formSubject.trim() || undefined : undefined) : undefined,
+        body: contentMode === 'custom' ? formBody.trim() : undefined,
+        templateId: contentMode === 'template' ? selectedTemplateId : undefined,
+        templateVersion: contentMode === 'template' && selectedVersionNumber !== '' ? Number(selectedVersionNumber) : undefined,
+        templateVariables: contentMode === 'template' && Object.keys(templateVariables).length > 0 ? templateVariables : undefined,
         idempotencyKey: formIdempotencyKey.trim() || undefined,
         scheduledAt: formScheduledAt ? new Date(formScheduledAt).toISOString() : undefined,
       };
 
       const res = await createNotification(payload, formIdempotencyKey.trim() || undefined);
-
-      setCreateFeedback({
-        msg: res.isReplay
-          ? `Matching Idempotent Replay (202): Accepted notification ${res.data.id} (${res.data.status})`
-          : `Success: Accepted notification ${res.data.id} (${res.data.status})`,
-        isReplay: res.isReplay,
-        id: res.data.id,
-      });
 
       // Clear inputs
       setFormRecipient('');
@@ -224,8 +356,15 @@ export default function NotificationsPage() {
       setFormBody('');
       setFormIdempotencyKey('');
       setFormScheduledAt('');
+      setSelectedTemplateId('');
+      setTemplateDetail(null);
+      setActiveVersion(null);
+      setTemplateVariables({});
+      setShowCreateModal(false);
 
-      await fetchList();
+      // Navigate straight to the created notification's detail page
+      // where the lifecycle rail updates in real time!
+      navigate(`/app/notifications/${res.data.id}`);
     } catch (err: any) {
       setCreateError(err.message || 'Failed to accept notification');
     } finally {
@@ -299,17 +438,6 @@ export default function NotificationsPage() {
             <Plus size={15} />
             Send Notification
           </button>
-
-          <Link
-            to="/app/notifications/new"
-            className="btn btn-secondary"
-            style={{
-              textDecoration: 'none',
-              fontSize: 13,
-            }}
-          >
-            Full Form →
-          </Link>
         </div>
       </div>
 
@@ -702,33 +830,227 @@ export default function NotificationsPage() {
                 />
               </div>
 
-              {/* Subject (for EMAIL) */}
-              {formChannel === 'EMAIL' && (
-                <div className="form-group">
-                  <label>Subject</label>
-                  <input
-                    type="text"
-                    value={formSubject}
-                    onChange={(e) => setFormSubject(e.target.value)}
-                    placeholder="Notification Subject"
-                  />
+              {/* Message Content Mode Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, marginBottom: 2 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-harbor)', margin: 0 }}>
+                  Message Content
+                </label>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    padding: 2,
+                    backgroundColor: 'var(--color-chalk)',
+                    borderRadius: 'var(--radius-control)',
+                    border: '1px solid var(--color-rail)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setContentMode('custom')}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      fontWeight: contentMode === 'custom' ? 600 : 500,
+                      backgroundColor: contentMode === 'custom' ? 'var(--color-paper)' : 'transparent',
+                      color: contentMode === 'custom' ? 'var(--color-harbor)' : 'var(--color-ink-2)',
+                      border: 'none',
+                      borderRadius: 'calc(var(--radius-control) - 2px)',
+                      boxShadow: contentMode === 'custom' ? 'var(--shadow-sm)' : 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Custom Message
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContentMode('template')}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: 12,
+                      fontWeight: contentMode === 'template' ? 600 : 500,
+                      backgroundColor: contentMode === 'template' ? 'var(--color-paper)' : 'transparent',
+                      color: contentMode === 'template' ? 'var(--color-harbor)' : 'var(--color-ink-2)',
+                      border: 'none',
+                      borderRadius: 'calc(var(--radius-control) - 2px)',
+                      boxShadow: contentMode === 'template' ? 'var(--shadow-sm)' : 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Use Template
+                  </button>
                 </div>
+              </div>
+
+              {/* Custom Message Mode Inputs */}
+              {contentMode === 'custom' && (
+                <>
+                  {formChannel === 'EMAIL' && (
+                    <div className="form-group">
+                      <label>Subject</label>
+                      <input
+                        type="text"
+                        value={formSubject}
+                        onChange={(e) => setFormSubject(e.target.value)}
+                        placeholder="Notification Subject"
+                      />
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Body Content</label>
+                    <textarea
+                      rows={4}
+                      value={formBody}
+                      onChange={(e) => setFormBody(e.target.value)}
+                      placeholder="Notification content / payload..."
+                      style={{
+                        fontFamily: formChannel === 'EMAIL' ? 'var(--font-sans)' : 'var(--font-mono)',
+                      }}
+                      required
+                    />
+                  </div>
+                </>
               )}
 
-              {/* Body */}
-              <div className="form-group">
-                <label>Body Content</label>
-                <textarea
-                  rows={4}
-                  value={formBody}
-                  onChange={(e) => setFormBody(e.target.value)}
-                  placeholder="Notification content / payload..."
-                  style={{
-                    fontFamily: formChannel === 'EMAIL' ? 'var(--font-sans)' : 'var(--font-mono)',
-                  }}
-                  required
-                />
-              </div>
+              {/* Template Mode Inputs */}
+              {contentMode === 'template' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="form-group">
+                    <label>Select Template ({formChannel})</label>
+                    {templatesLoading ? (
+                      <div style={{ fontSize: 12, color: 'var(--color-ink-2)', padding: '6px 0' }}>Loading templates…</div>
+                    ) : templates.length === 0 ? (
+                      <div style={{ fontSize: 12, color: 'var(--color-ink-2)', padding: '10px 12px', backgroundColor: 'var(--color-chalk)', borderRadius: 'var(--radius-control)', border: '1px solid var(--color-rail)' }}>
+                        No templates found for <strong>{formChannel}</strong>. You can switch to Custom Message or <Link to="/app/templates" style={{ color: 'var(--color-signal)' }}>create a template</Link>.
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          fontSize: 13,
+                          borderRadius: 'var(--radius-control)',
+                          border: '1px solid var(--color-rail)',
+                          backgroundColor: 'var(--color-paper)',
+                          color: 'var(--color-harbor)',
+                        }}
+                        required
+                      >
+                        <option value="">-- Choose a template --</option>
+                        {templates.map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>
+                            {tpl.name}{tpl.currentVersion?.versionNumber ? ` • v${tpl.currentVersion.versionNumber}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {templateDetail && templateDetail.versions && templateDetail.versions.length > 0 && (
+                    <div className="form-group">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>Template Version</label>
+                        {activeVersion && (
+                          <span className={`status-chip status-${activeVersion.status.toLowerCase()}`} style={{ fontSize: 10, padding: '1px 6px' }}>
+                            {activeVersion.status}
+                          </span>
+                        )}
+                      </div>
+                      <select
+                        value={selectedVersionNumber}
+                        onChange={(e) => handleVersionChange(Number(e.target.value))}
+                        style={{
+                          width: '100%',
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          borderRadius: 'var(--radius-control)',
+                          border: '1px solid var(--color-rail)',
+                          backgroundColor: 'var(--color-paper)',
+                          color: 'var(--color-harbor)',
+                        }}
+                      >
+                        {templateDetail.versions.map((ver) => (
+                          <option key={ver.id} value={ver.versionNumber}>
+                            v{ver.versionNumber} ({ver.status}){ver.subject ? ` — ${ver.subject}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Template Variables */}
+                  {Object.keys(templateVariables).length > 0 && (
+                    <div
+                      style={{
+                        padding: 12,
+                        backgroundColor: 'var(--color-chalk)',
+                        borderRadius: 'var(--radius-control)',
+                        border: '1px solid var(--color-rail)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', margin: 0 }}>
+                        Template Variables ({Object.keys(templateVariables).length})
+                      </label>
+                      {Object.keys(templateVariables).map((vKey) => (
+                        <div key={vKey} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            className="mono"
+                            style={{
+                              minWidth: 100,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: 'var(--color-signal)',
+                              backgroundColor: 'var(--color-paper)',
+                              padding: '4px 6px',
+                              borderRadius: 4,
+                              border: '1px solid var(--color-rail)',
+                            }}
+                          >
+                            {`{{${vKey}}}`}
+                          </span>
+                          <input
+                            type="text"
+                            value={templateVariables[vKey]}
+                            onChange={(e) => setTemplateVariables((prev) => ({ ...prev, [vKey]: e.target.value }))}
+                            placeholder={`Value for ${vKey}`}
+                            style={{ flex: 1, padding: '6px 10px', fontSize: 12 }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Rendered Preview */}
+                  {activeVersion && (
+                    <div
+                      style={{
+                        padding: 10,
+                        backgroundColor: 'var(--color-paper-muted)',
+                        borderRadius: 'var(--radius-control)',
+                        border: '1px solid var(--color-rail)',
+                        fontSize: 12,
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, color: 'var(--color-ink-2)', marginBottom: 4 }}>
+                        Live Interpolation Preview:
+                      </div>
+                      {formChannel === 'EMAIL' && activeVersion.subject && (
+                        <div style={{ marginBottom: 4 }}>
+                          <strong>Subject:</strong> {previewSubject}
+                        </div>
+                      )}
+                      <div style={{ whiteSpace: 'pre-wrap', color: 'var(--color-ink-1)', maxHeight: 100, overflowY: 'auto' }}>
+                        {previewBody || <em>(Empty template body)</em>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Idempotency Key */}
               <div className="form-group">

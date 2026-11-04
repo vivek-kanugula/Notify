@@ -86,7 +86,7 @@ export default function TenantStatusModal({
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="status-modal-title">
+    <div className="modal-overlay modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="status-modal-title">
       <div className="modal-card" style={{ maxWidth: 480 }}>
         {/* Header */}
         <div className="modal-header">
