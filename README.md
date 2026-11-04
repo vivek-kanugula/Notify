@@ -34,38 +34,67 @@
 
 ## What is Notify?
 
-**Notify** is a standalone, mission-critical notification delivery platform engineered for high-scale multi-tenant applications. Businesses call Notify over a secure REST API to dispatch transactional messages across **Email, Webhooks, and In-App** channels, completely eliminating the need for business services to manage provider SDKs, retry storms, network timeouts, or duplicate delivery edge cases.
+<div align="justify">
 
-Notification dispatch is not a simple background task you bolt onto an application microservice — **it is distributed infrastructure**, governed by the same strict correctness invariants as a financial payments ledger:
+Have you ever ordered food on DoorDash or Swiggy, booked a ride on Uber, or purchased an item on Amazon? The moment you tap **"Place Order"**, you expect an immediate confirmation on your screen. But behind that single tap, the platform must coordinate multiple downstream actions: dispatching an email receipt, pushing an in-app alert to your phone, sending a one-time passcode (OTP), and notifying merchant backends via server-to-server webhooks.
 
-1. **A notification must never be silently lost or dropped**, even during sudden power failure, network partition, or third-party provider outage.
-2. **A notification must never be processed twice**, even when a client experiences a network timeout and aggressively replays the exact same request.
-3. **External provider latency must never block the client application**, protecting core checkout and authentication workflows from third-party gateway degradations.
+To a beginner or someone building their first application, sending a notification sounds as simple as calling a single function inside your web server:
 
-In high-throughput architectures like Stripe, Uber, or Swiggy, an order service cannot risk hanging or crashing simply because an upstream mail gateway is experiencing elevated latency. Notify acts as the resilient, high-speed isolation layer: requests are validated and committed atomically in under **15 ms** to PostgreSQL via the Transactional Outbox pattern, followed by asynchronous, partition-ordered delivery across Kafka workers with cryptographic deduplication and complete lifecycle visibility.
+```java
+// What beginners think notification delivery looks like:
+emailGateway.send(user.getEmail(), "Your order is confirmed!");
+```
+
+**In real-world production systems serving thousands of concurrent users, that single line of code is a ticking time bomb.**
+
+What if the external email server takes 4 seconds to respond? The customer's browser or mobile app completely freezes, and they wonder if their credit card was charged. What if the email server crashes or the network flickers? The order is saved in the database, but the receipt is lost forever, flooding customer support with complaints. What if the customer taps "Order" twice because their mobile connection dropped? They get charged once, but receive duplicate receipt emails and duplicate webhooks.
+
+### The Solution: A Dedicated Notification Isolation Layer
+
+**Notify** is an enterprise-grade, standalone notification delivery platform engineered for high-scale, multi-tenant applications. Instead of your primary business microservices (checkout, billing, authentication, or shipping) talking directly to slow, unpredictable third-party email providers or remote webhook servers, they hand off the message to **Notify** through a secure REST API in under **15 milliseconds**.
+
+Notify immediately commits the notification to an ACID-compliant PostgreSQL database using the **Transactional Outbox Pattern**, acknowledges the calling service with an **`HTTP 202 Accepted`** response, and guarantees reliable, partition-ordered background delivery across **Email, Webhook, and In-App** channels.
+
+Notification dispatch is not a trivial background helper you tack onto a web controller — **it is distributed infrastructure**, governed by the same strict correctness invariants as a financial payments ledger:
+
+1. **Zero Message Loss (Durability & Outbox):** A notification must never be silently lost or dropped, even during unexpected power outages, network splits, or third-party email provider downtime.
+2. **Zero Duplicate Spam (Cryptographic Idempotency):** A notification must never be delivered twice, even when an unstable network connection causes client SDKs or browsers to aggressively retry the exact same request.
+3. **Zero Upstream Latency (Non-Blocking Decoupling):** External provider slowdowns or gateway timeouts must never block your primary business application. Core checkout, signup, and payment flows remain ultra-fast, isolated, and responsive.
+
+</div>
 
 ---
 
-## The Problem
+## The Problem: Why Notifications Break at Scale
 
-Every engineering organization that builds user notifications (order confirmations, one-time passwords, billing alerts, customer webhooks) inevitably encounters three critical distributed systems failure modes when notification logic lives inside the primary application:
+<div align="justify">
 
-### 1. Tight coupling & remote side-effects destroy reliability
-Executing an external HTTP or SMTP call (e.g., `sendgrid.send()` or remote webhook POST) inside a database transaction holds database connection leases hostage for seconds. If the external provider experiences a 504 gateway timeout, the transaction pool saturates, thread pools exhaust, and unrelated database queries fail across the entire platform. If the remote side effect succeeds but the subsequent local database commit fails, the notification is dispatched, yet the local system has zero record of it.
+Every software engineering organization that builds user-facing applications eventually encounters three critical distributed systems failure modes when notification logic lives inside the primary business application:
 
-### 2. Synchronous delivery destroys end-user latency
-External delivery networks are unpredictable. Remote round trips commonly take 300 ms to 2,500 ms. Making an end-user wait on that network hop during checkout or user signup degrades conversion and introduces catastrophic cascading latencies into upstream API gateways.
+### 1. Tight Coupling & Remote Side-Effects Destroy System Reliability
+Imagine standing at a supermarket checkout line, and the cashier refuses to scan the next customer until they finish a 3-minute phone call confirming delivery with a supplier. That is exactly what happens when your code calls an external HTTP or SMTP service (such as SendGrid, Twilio, or AWS SES) inside an active database transaction.
 
-### 3. Network retries cause duplicate dispatch (The Distributed Idempotency Trap)
-When an HTTP request times out due to a slow network packet, client SDKs automatically retry the request. A naive system processes the retransmitted request a second time: the user receives duplicate receipt emails, tenant quotas are consumed twice, and delivery metrics are corrupted. Solving this correctly under high concurrent traffic without exhausting database connection pools is where standard implementations break down.
+Calling an external network service while holding open a local database connection keeps that connection lease hostage for hundreds or thousands of milliseconds. If the third-party gateway experiences elevated latency or a 504 gateway timeout, your database connection pool (HikariCP) saturates, application threads starve, and completely unrelated database queries fail across your entire platform. Even worse: if the remote email goes out successfully, but the local database transaction rolls back a millisecond later, you have triggered a "phantom side-effect"—the customer receives an email for an order that does not exist in your database!
 
-Notify resolves all three challenges by providing a dedicated, asynchronous, multi-tenant infrastructure layer with guaranteed at-least-once delivery, sub-20 ms acceptance, and automated recovery.
+### 2. Synchronous Delivery Destroys End-User Latency
+Third-party delivery networks are inherently unpredictable. A remote network hop over the public internet to an SMTP server or external webhook endpoint routinely takes anywhere from 300 ms to 2,500 ms. Forcing an end-user to wait on that external round trip during critical user journeys (such as checkout, account registration, or password reset) degrades conversion rates and introduces severe latency bottlenecks into upstream API gateways.
+
+### 3. Network Retries Cause Duplicate Dispatch (The Distributed Idempotency Trap)
+When an HTTP request times out due to a slow mobile network packet, client SDKs and mobile browsers automatically retransmit the request. A naive system processes the retransmitted request a second time: the end-user receives two or three identical receipt emails, tenant subscription quotas are drained twice, and downstream financial webhooks trigger multiple times. Solving this cleanly under high concurrent load without exhausting database connection pools requires sub-millisecond in-memory deduplication paired with durable database uniqueness constraints.
+
+**Notify completely resolves all three challenges** by providing a dedicated, asynchronous, multi-tenant infrastructure layer with guaranteed at-least-once delivery, sub-20 ms acceptance, and automated failure recovery.
+
+</div>
 
 ---
 
 ## Architecture
 
-Notify employs a resilient, decoupled architecture built on Java 25 Virtual Threads, Spring Boot 4, PostgreSQL 16/17, Apache Kafka, Redis, and an enterprise observability suite:
+<div align="justify">
+
+Notify employs a resilient, decoupled architecture built on Java 25 Virtual Threads, Spring Boot 4, PostgreSQL 16/17, Apache Kafka, Redis, and a comprehensive enterprise observability suite:
+
+</div>
 
 <div align="center">
   <img width="1380" alt="Notify Database Schema & Entity Architecture" src="./assets/screenshots/00-architecture-flow.png" />
@@ -75,7 +104,11 @@ Notify employs a resilient, decoupled architecture built on Java 25 Virtual Thre
 
 ### Component & Tool Contributions
 
+<div align="justify">
+
 To ensure maximum resilience, strict tenant isolation, and zero-loss dispatch under peak production traffic, every architectural component and tool fulfills a specialized role in the Notify platform:
+
+</div>
 
 | Component / Tool | Technology & Version | Architecture Layer | Specific Contribution & Core Value |
 |---|---|---|---|
@@ -102,26 +135,36 @@ To ensure maximum resilience, strict tenant isolation, and zero-loss dispatch un
 
 ### How It Works (Step-by-Step)
 
-1. **Step 1: Request Ingestion & Security (< 15ms)**  
-   The client makes a `POST /api/v1/notifications` request carrying an `X-API-Key` and a unique `Idempotency-Key`. The request is authenticated via SHA-256 hash lookup and checked against Redis sliding-window quotas. An atomic Redis `SET NX` command acquires an immediate 24-hour memory lock to prevent duplicate concurrent submissions.
+<div align="justify">
 
-2. **Step 2: Atomic PostgreSQL Persistence & Immediate Acceptance**  
-   The service executes a **single ACID database transaction** that simultaneously writes the Notification entity (status: `ACCEPTED`) and appends a row to the `outbox_events` table. Once committed, the server returns **`HTTP 202 Accepted`** back to the client in under 15 ms. The client is never kept waiting on external networks.
+Here is the exact journey of a notification through the Notify platform, from the initial API call to guaranteed inbox delivery:
 
-3. **Step 3: Asynchronous Outbox Relay to Kafka**  
-   A dedicated background outbox relay worker polls the `outbox_events` table using `SELECT ... FOR UPDATE SKIP LOCKED` and publishes messages to the Kafka topic `notify.notifications.dispatched`. Messages are partitioned strictly by `tenant_id`, guaranteeing per-tenant FIFO ordering without global bottlenecking.
+1. **Step 1: Lightning-Fast Ingestion & Security Gate (< 15ms)**  
+   The client application makes an authenticated `POST /api/v1/notifications` request carrying an `X-API-Key` and a client-generated `Idempotency-Key`. The request is verified against SHA-256 key digests and checked against Redis sliding-window quotas to throttle abusive traffic bursts. An atomic Redis `SET NX` command instantly acquires a 24-hour memory lock on the idempotency key, immediately blocking concurrent duplicate requests in under 1 ms without hitting the database.
 
-4. **Step 4: Parallel Worker Dispatch & Resilience**  
-   Java 25 Virtual Thread consumers pull messages from Kafka and invoke the appropriate delivery channel worker. Outbound requests are governed by Resilience4j circuit breakers and bounded exponential retries (`1s → 2s → 4s → 8s → 16s`, capped at 30s with jitter). Unrecoverable failures (after 3 attempts) are quarantined in the Dead Letter Queue (`dlq_messages`) for operator inspection and replay.
+2. **Step 2: Atomic PostgreSQL Persistence & Immediate Client Acceptance**  
+   The service executes a **single ACID database transaction** that simultaneously inserts the Notification entity (with initial status `ACCEPTED`) and appends a corresponding event to the `outbox_events` table. Once PostgreSQL commits this transaction, Notify returns **`HTTP 202 Accepted`** back to the calling client in under **15 ms**. The caller's thread is immediately freed, completely decoupling end-user latency from downstream delivery networks.
 
-5. **Step 5: Real-Time Streaming & Full Observability**  
-   Upon delivery, PostgreSQL updates the notification status to `DELIVERED` and logs a `DeliveryAttempt`. The real-time Server-Sent Events (SSE) stream (`/api/v1/notifications/stream`) instantly broadcasts the event to browser inboxes in under 50 ms. Every stage emits Micrometer metrics to Prometheus and structured ECS JSON logs to Loki with distributed trace context in Tempo.
+3. **Step 3: Asynchronous Outbox Relay to Apache Kafka**  
+   A dedicated background outbox relay worker polls the `outbox_events` table using PostgreSQL's lock-free `SELECT ... FOR UPDATE SKIP LOCKED` query and publishes pending events to the Kafka topic `notify.notifications.dispatched`. Every message is keyed by `tenant_id`, guaranteeing strict per-tenant FIFO ordering (so an "Order Shipped" notification can never overtake an "Order Placed" notification) while allowing different tenants to be processed in parallel across partitions.
+
+4. **Step 4: Parallel Worker Dispatch & Fault-Tolerant Delivery**  
+   Java 25 Virtual Thread consumers pull messages from Kafka and invoke the appropriate delivery channel dispatcher (Email, Webhook, or In-App). Outbound requests are governed by Resilience4j circuit breakers and bounded exponential backoff retries with full random jitter (`1s → 2s → 4s → 8s → 16s`, capped at 30s). If an external provider experiences permanent failure (after 3 exhausted attempts), the message is safely quarantined in the Dead Letter Queue (`dlq_messages`) table with full stack traces for operator review and one-click replay.
+
+5. **Step 5: Live Streaming & End-to-End Observability**  
+   Upon successful delivery, PostgreSQL marks the notification as `DELIVERED` and records an immutable `DeliveryAttempt` audit row. The real-time Server-Sent Events (SSE) stream (`/api/v1/notifications/stream`) broadcasts the event directly to connected browser clients in under 50 ms. Every stage emits Micrometer metrics to Prometheus, structured ECS JSON logs to Loki, and W3C distributed trace spans to Tempo.
+
+</div>
 
 ---
 
 ## The Three Delivery Channels
 
-Notify strictly focuses on three core enterprise delivery transports:
+<div align="justify">
+
+Notify strictly focuses on three core enterprise delivery transports, ensuring end-to-end reliability, cryptographic verification, and instant UI synchronization across all modern business touchpoints:
+
+</div>
 
 | Channel | Transport / Provider | Protocol & Security | Recipient & Guarantees |
 |---|---|---|---|
@@ -133,10 +176,19 @@ Notify strictly focuses on three core enterprise delivery transports:
 
 ## Channel Delivery Verification Evidence
 
+<div align="justify">
+
 Each of the three delivery channels has been empirically verified in live end-to-end execution, capturing the complete lifecycle progression from acceptance to verified delivery:
 
+</div>
+
 ### 1. Email Channel Delivery Verification
+
+<div align="justify">
+
 Verified transactional email dispatch through the SMTP / SES gateway, confirming TLS 1.3 handshake, DKIM/SPF headers, and upstream `250 OK` acknowledgment:
+
+</div>
 
 <div align="center">
   <img width="920" alt="Email Delivery Verification" src="./assets/screenshots/channel-verify-email.png" />
@@ -145,7 +197,12 @@ Verified transactional email dispatch through the SMTP / SES gateway, confirming
 ---
 
 ### 2. Webhook Channel Delivery Verification
+
+<div align="justify">
+
 Verified server-to-server HTTP POST dispatch signed with `HMAC-SHA256(secret, timestamp + "." + payload)` and confirmed with a `200 OK` receiver response:
+
+</div>
 
 <div align="center">
   <img width="920" alt="Webhook Delivery Verification" src="./assets/screenshots/channel-verify-webhook.png" />
@@ -154,7 +211,12 @@ Verified server-to-server HTTP POST dispatch signed with `HMAC-SHA256(secret, ti
 ---
 
 ### 3. In-App Channel Delivery Verification
+
+<div align="justify">
+
 Verified real-time Server-Sent Events (SSE) delivery streaming directly into the user interface drawer with sub-25ms latency and instant read-state transitions:
+
+</div>
 
 <div align="center">
   <img width="920" alt="In-App Delivery Verification" src="./assets/screenshots/channel-verify-inapp.png" />
@@ -163,6 +225,12 @@ Verified real-time Server-Sent Events (SSE) delivery streaming directly into the
 ---
 
 ## Tech Stack
+
+<div align="justify">
+
+Every technology in the Notify ecosystem was chosen to optimize throughput, resilience, and operational clarity while keeping architectural complexity under strict control:
+
+</div>
 
 | Layer | Technology | Architectural Justification |
 |---|---|---|
@@ -185,86 +253,119 @@ Verified real-time Server-Sent Events (SSE) delivery streaming directly into the
 
 ## Architectural & Engineering Decisions
 
+<div align="justify">
+
+Distributed systems require deliberate trade-offs. Below are the 14 core architectural decisions that make Notify resilient under extreme load, explained both conceptually and technically:
+
 ### 1. Transactional Outbox Pattern over Direct Broker Publishing
-Publishing directly to Kafka during an HTTP request creates the classic **Dual-Write Distributed Transaction Problem**: if the broker goes down or the network drops after the database commits, the message is lost forever; if the broker write succeeds but the database rolls back, the user receives a phantom notification. Notify writes the notification and the outbox event in a **single ACID PostgreSQL transaction**. A dedicated poller drains `outbox_events` to Kafka. If Kafka is unreachable, the outbox simply buffers records safely on disk.
+* **The Problem (The Dual-Write Dilemma):** If an application tries to write to PostgreSQL and publish to Kafka in the same request, one of them will eventually fail. If Kafka is temporarily down, the database saves the order, but the message is lost forever. If Kafka succeeds but the database rolls back, the user receives a receipt for an order that was never saved!
+* **Notify's Solution:** Notify writes the notification record and the outbox event inside a **single ACID PostgreSQL transaction**. A dedicated background relay worker polls `outbox_events` and publishes them to Kafka. If Kafka goes down, events safely queue up in PostgreSQL on disk without data loss, draining automatically when Kafka recovers.
 
 ### 2. Kafka Partitioning by `tenant_id`
-All notifications are dispatched to Kafka with the `tenant_id` as the message partition key. This guarantees:
-- **Strict FIFO ordering per tenant:** A tenant's "Order Shipped" update is guaranteed never to overtake their "Order Placed" notification.
-- **Horizontal Consumer Scale:** Different tenants execute concurrently on different Kafka partitions without locking one another.
+* **The Problem:** In multi-tenant systems, high volume from one active tenant must never block other tenants. Furthermore, notifications for a given customer must arrive in the exact order they occurred.
+* **Notify's Solution:** All notifications published to Kafka use `tenant_id` as the message partition key. This guarantees **strict FIFO ordering per tenant** (e.g., "Order Shipped" can never overtake "Order Placed"), while allowing independent tenant streams to execute concurrently across different Kafka consumer partitions without contention.
 
 ### 3. Two-Tier Distributed Idempotency (Redis Fast-Path + PostgreSQL Anchor)
-Every write request accepts an `Idempotency-Key` header.
-- **Memory Tier:** An atomic Redis `SET key:tenant:idempotency_key value NX EX 86400` executes in < 1 ms. If the key exists, the cached response is returned immediately with zero database I/O.
-- **Database Tier:** A PostgreSQL `UNIQUE(tenant_id, idempotency_key)` constraint provides durable protection against cache flushes. If a duplicate request races past memory, the database rejects the second insert with a unique constraint violation, mapped cleanly to HTTP 409 Conflict.
+* **The Problem:** Under heavy traffic, when an HTTP request times out, clients retry. If duplicate requests hit the server milliseconds apart, naive database queries experience race conditions, leading to duplicate emails and double charges.
+* **Notify's Solution:** Every write request requires an `Idempotency-Key` header.
+  * **Memory Fast-Path:** Redis executes an atomic `SET key:tenant:idempotency_key value NX EX 86400` in < 1 ms. If the key already exists, Redis immediately returns the cached response with zero database I/O.
+  * **Database Anchor:** A PostgreSQL `UNIQUE(tenant_id, idempotency_key)` constraint provides durable long-term protection against cache evictions. If a duplicate request races past memory, PostgreSQL rejects the second insertion, cleanly mapped to `HTTP 409 Conflict`.
 
 ### 4. Remote HTTP Side-Effects Executed Outside Database Transactions
-Remote network provider calls (e.g., SMTP or webhook endpoints) are **never executed inside open database transactions**. A remote side-effect cannot be rolled back locally. Holding database connections open while awaiting remote HTTP responses exhausts HikariCP connection pools. All outbound requests occur in asynchronous worker threads after durable acceptance.
+* **The Problem:** Calling an external HTTP or SMTP service while inside an open `@Transactional` database block holds database connection leases hostage. If the external provider hangs for 5 seconds, all database connections deplete, crashing the entire application.
+* **Notify's Solution:** Outbound network calls are **never executed inside open database transactions**. A remote side-effect cannot be rolled back locally. All outbound deliveries occur strictly in asynchronous background worker threads after durable acceptance.
 
 ### 5. Real-Time Server-Sent Events (SSE) over Polling
-Instead of having client browsers bombard the server with polling requests every 3 seconds to check for new notifications, Notify exposes an unbuffered SSE endpoint (`/api/v1/notifications/stream`). When a notification reaches `DELIVERED` or `FAILED`, the event is pushed over an open HTTP connection to the browser within 50 ms.
+* **The Problem:** Having thousands of client web browsers hit `/api/v1/notifications` every 2 seconds to check for new alerts creates massive, unnecessary database load and battery drain.
+* **Notify's Solution:** Notify exposes an unbuffered SSE endpoint (`/api/v1/notifications/stream`). When a notification reaches `DELIVERED` status, the event is pushed directly over an open HTTP connection to the browser within 50 ms with cursor-based reconnect support.
 
 ### 6. Clustered Quartz Scheduling with Generation Fencing
-Future-scheduled notifications are persisted in PostgreSQL using Quartz's clustered JDBC job store. To prevent race conditions during node failover, each job execution validates a monotonically increasing generation token (`generation_fence`), ensuring an expired master node cannot double-fire an alert.
+* **The Problem:** In a multi-node cluster, if Node A is busy during a garbage collection pause and Node B takes over scheduled tasks, Node A might wake up later and fire the same scheduled notification again (split-brain double firing).
+* **Notify's Solution:** Future-scheduled notifications are persisted in PostgreSQL using Quartz's clustered JDBC JobStore. Each execution validates a monotonically increasing generation token (`generation_fence`), ensuring an expired master node cannot double-fire an alert.
 
 ### 7. Java 25 Virtual Threads over Reactive WebFlux
-Reactive programming (Project Reactor / WebFlux) forces code into complex chained callback pipelines (`Mono`/`Flux`), where stack traces lose meaning and debugging becomes painful. Java 25 Virtual Threads allow standard imperative, blocking JDBC and HTTP calls to run on millions of lightweight threads, giving Notify top-tier throughput with simple, maintainable, debuggable code.
+* **The Problem:** Reactive programming frameworks (WebFlux / RxJava) force developers into complex chained callback pipelines (`Mono`/`Flux`), where stack traces lose meaning and debugging becomes an operational nightmare.
+* **Notify's Solution:** Java 25 Virtual Threads (Project Loom) allow standard, readable, imperative blocking code (JDBC, HTTP calls) to run on millions of lightweight threads (`Thread.ofVirtual()`). Notify achieves world-class throughput without reactive callback complexity.
 
 ### 8. Single-Reveal API Keys with SHA-256 Storage
-Raw tenant API keys are shown **exactly once** upon creation. Only the cryptographic SHA-256 hash (`sha256(raw_key)`) is persisted in PostgreSQL. In the event of a database dump or read-access compromise, zero usable tenant credentials are leaked.
+* **The Problem:** Storing plain-text API keys in the database poses a catastrophic security risk if a database backup or read-access vulnerability is ever exploited.
+* **Notify's Solution:** Raw tenant API keys are displayed to the user **exactly once** upon generation. Only the cryptographic SHA-256 hash (`sha256(raw_key)`) is stored in PostgreSQL. In the event of a database compromise, zero usable tenant credentials are leaked.
 
 ### 9. Webhook Security with HMAC-SHA256 & Timestamp Fencing
-Outbound webhooks sent to tenant servers include an `X-Notify-Signature-256` header containing `HMAC-SHA256(secret, timestamp + "." + payload)` along with an `X-Notify-Timestamp` header. Receivers can verify authenticity and reject replays older than 5 minutes.
+* **The Problem:** How does a customer's server know that an incoming webhook was genuinely sent by Notify and not forged by a malicious attacker?
+* **Notify's Solution:** Outbound webhooks include an `X-Notify-Signature-256` header containing `HMAC-SHA256(secret, timestamp + "." + payload)` and an `X-Notify-Timestamp` header. Receivers can verify the cryptographic signature and reject any replayed requests older than 5 minutes.
 
 ### 10. PostgreSQL `FOR UPDATE SKIP LOCKED` for Outbox Polling
-When multiple relay instances run in parallel, simple `SELECT ... FOR UPDATE` causes workers to lock each other and serialize execution. By using `FOR UPDATE SKIP LOCKED`, each relay instance cleanly grabs the next non-locked batch of 100 outbox records and ships them to Kafka without blocking any other node.
+* **The Problem:** When multiple background relay instances poll the outbox table using standard `SELECT ... FOR UPDATE`, they queue up behind each other on the same index range, creating a severe serialized bottleneck.
+* **Notify's Solution:** By using PostgreSQL's `FOR UPDATE SKIP LOCKED`, each relay instance cleanly skips rows currently locked by other instances, grabbing the next non-locked batch of 100 outbox records and shipping them to Kafka without blocking any other node.
 
 ### 11. Strict Multi-Tenant Service Boundaries
-Tenant identity is derived strictly from verified JWT tokens or validated API key hashes, never from untrusted query strings or URL paths. Every repository query explicitly includes `AND tenant_id = :tenantId`. Querying an object belonging to another tenant returns an immediate HTTP 404 Not Found, completely preventing cross-tenant information leakage.
+* **The Problem:** In a multi-tenant platform, a bug in query filtering could accidentally expose Tenant A's private notifications to Tenant B.
+* **Notify's Solution:** Tenant identity is derived strictly from verified JWT tokens or validated API key hashes, never from untrusted query parameters or body payloads. Every repository query explicitly includes `AND tenant_id = :tenantId`. Querying an object belonging to another tenant returns an immediate `HTTP 404 Not Found`, completely preventing cross-tenant information leakage.
 
 ### 12. Bounded Exponential Backoffs with Full Jitter
-Failed attempts retry using `min(1000 * 2^attempts, 30000) + random_jitter`. The random jitter spreads out re-attempts, preventing the "Thundering Herd Problem" where thousands of retrying workers strike a recovering mail provider at the exact same millisecond.
+* **The Problem (The Thundering Herd):** When an email provider recovers from an outage, thousands of retrying workers hitting it at the exact same second will instantly crash it again.
+* **Notify's Solution:** Failed attempts retry using `min(1000 * 2^attempts, 30000) + random_jitter`. The random jitter spreads out re-attempts across a smooth time window, preventing retry storms and allowing third-party services to recover gracefully.
 
 ### 13. Resilience4j Circuit Breakers per Outbound Channel
-Each channel operates behind an independent circuit breaker. If an upstream email gateway begins failing with 500 errors, only the email circuit trips into `OPEN` state. Webhook and In-App notifications continue delivering normally at full speed.
+* **The Problem:** If an upstream email provider goes down, ongoing delivery attempts will hang, exhausting thread pools and starving webhook and in-app delivery pipelines.
+* **Notify's Solution:** Each channel operates behind an isolated Resilience4j circuit breaker. If an upstream email gateway begins failing (> 50% error rate), only the email circuit trips into `OPEN` state. Webhook and In-App notifications continue delivering normally at full speed.
 
 ### 14. Unified Structured JSON Logging with Trace Correlation
-Every log line emitted by the backend is structured in ECS JSON format and stamped with `trace_id`, `span_id`, and `tenant_id`. Searching a single trace ID in Grafana Loki correlates the initial HTTP request, the outbox publication, the Kafka offset, and the final provider response across all system logs.
+* **The Problem:** In a distributed asynchronous architecture, debugging an error across API controllers, outbox pollers, Kafka workers, and provider calls is nearly impossible with plain text logs.
+* **Notify's Solution:** Every log statement emitted by the backend is formatted in structured ECS JSON and stamped with `trace_id`, `span_id`, and `tenant_id`. Searching a single trace ID in Grafana Loki correlates the initial HTTP request, the outbox write, the Kafka offset, and the final provider response across all system logs.
+
+</div>
 
 ---
 
 ## Production Incidents & Battle-Tested Hardening ("War Stories")
 
+<div align="justify">
+
+Building real-world distributed systems means facing real-world failures. Below are four concrete production issues encountered during extreme load testing and the exact architectural hardening applied to resolve them:
+
 ### 1. The Outbox Polling Lock Contention Incident
-- **Symptom:** As notification volume scaled to 500 req/s, multiple outbox poller instances began experiencing lock timeouts in PostgreSQL, driving database CPU usage to 95% while Kafka queue throughput plummeted.
-- **Root Cause:** The outbox query used `SELECT * FROM outbox_events WHERE status = 'PENDING' ORDER BY created_at LIMIT 100 FOR UPDATE`. When Instance 1 locked the first 100 rows, Instance 2 queued behind Instance 1 on the exact same index range, creating a serialized bottleneck.
-- **Resolution:** Updated the query to use PostgreSQL's `FOR UPDATE SKIP LOCKED`. Instance 2 immediately skips rows currently locked by Instance 1, allowing 10 outbox workers to process distinct batches concurrently with zero locking delay and database CPU dropping to 12%.
+* **The Symptom:** As notification volume scaled to 500 req/s, multiple outbox poller instances began experiencing severe lock timeouts in PostgreSQL, driving database CPU usage to 95% while Kafka queue throughput plummeted.
+* **The Root Cause:** The outbox query used `SELECT * FROM outbox_events WHERE status = 'PENDING' ORDER BY created_at LIMIT 100 FOR UPDATE`. When Instance 1 locked the first 100 rows, Instance 2 queued behind Instance 1 on the exact same index range, creating a serialized bottleneck.
+* **The Resolution:** Updated the query to use PostgreSQL's `FOR UPDATE SKIP LOCKED`. Instance 2 immediately skips rows currently locked by Instance 1, allowing 10 outbox workers to process distinct batches concurrently with zero locking delay and database CPU dropping to 12%.
 
 ### 2. The Sub-Millisecond Idempotency Race Condition
-- **Symptom:** Under burst traffic, a client retried a request within 4 milliseconds. Both requests passed the application-level idempotency check and two identical confirmation emails were sent to the end user.
-- **Root Cause:** A standard "check database, then insert" sequence has an inherent gap between the `SELECT` and the `INSERT`. Both concurrent threads found no existing record simultaneously and both proceeded to insert.
-- **Resolution:** Replaced the application check with an atomic Redis `SET NX` command. Redis processes commands sequentially on an in-memory event loop: only the first request acquires the lock key; the second request is atomically rejected in memory within 0.8 ms without ever touching PostgreSQL.
+* **The Symptom:** Under burst traffic, a client retried a request within 4 milliseconds. Both requests passed the application-level idempotency check and two identical confirmation emails were sent to the end user.
+* **The Root Cause:** A standard "check database, then insert" sequence has an inherent gap between the `SELECT` and the `INSERT`. Both concurrent threads found no existing record simultaneously and both proceeded to insert.
+* **The Resolution:** Replaced the application check with an atomic Redis `SET NX` command. Redis processes commands sequentially on an in-memory event loop: only the first request acquires the lock key; the second request is atomically rejected in memory within 0.8 ms without ever touching PostgreSQL.
 
 ### 3. The Kafka Consumer Partition Rebalance Storm
-- **Symptom:** When a new worker container was deployed during peak load, the entire Kafka consumer cluster stopped processing notifications for 45 seconds, causing outbox backlog alerts to fire.
-- **Root Cause:** The default Kafka consumer configuration used the eager rebalance protocol. Whenever a node joined, all consumers gave up all partition assignments and re-negotiated from scratch.
-- **Resolution:** Configured `partition.assignment.strategy` to `CooperativeStickyAssignor` and set `group.instance.id` for static membership. Consumers now retain their existing partition assignments during rolling deployments; only the reassigned partition pauses for under 500 ms.
+* **The Symptom:** When a new worker container was deployed during peak load, the entire Kafka consumer cluster stopped processing notifications for 45 seconds, causing outbox backlog alerts to fire.
+* **The Root Cause:** The default Kafka consumer configuration used the eager rebalance protocol. Whenever a node joined, all consumers gave up all partition assignments and re-negotiated from scratch.
+* **The Resolution:** Configured `partition.assignment.strategy` to `CooperativeStickyAssignor` and set `group.instance.id` for static membership. Consumers now retain their existing partition assignments during rolling deployments; only the reassigned partition pauses for under 500 ms.
 
 ### 4. The Slow Webhook Subscriber Thread Starvation
-- **Symptom:** A tenant configured a webhook URL that took 25 seconds to respond. Very quickly, outbound email and In-App notifications stalled across the entire system.
-- **Root Cause:** All outbound channels shared a common thread pool. A sudden burst of slow webhooks consumed all available worker threads, starving fast email and In-App jobs.
-- **Resolution:** Decoupled channels into distinct consumer groups and isolated virtual thread executors. Webhook connections are bounded by a strict 4-second connect timeout and 8-second read timeout. Slow webhooks can no longer degrade email or In-App throughput.
+* **The Symptom:** A tenant configured a webhook URL that took 25 seconds to respond. Very quickly, outbound email and In-App notifications stalled across the entire system.
+* **The Root Cause:** All outbound channels shared a common thread pool. A sudden burst of slow webhooks consumed all available worker threads, starving fast email and In-App jobs.
+* **The Resolution:** Decoupled channels into distinct consumer groups and isolated virtual thread executors. Webhook connections are bounded by a strict 4-second connect timeout and 8-second read timeout. Slow webhooks can no longer degrade email or In-App throughput.
+
+</div>
 
 ---
 
 ## Observability & Telemetry Suite
 
-Notify comes pre-configured with a production-grade observability stack comprising **Prometheus**, **Grafana**, **Grafana Loki**, and **Grafana Tempo**.
+<div align="justify">
+
+Notify comes pre-configured with a production-grade observability stack comprising **Prometheus**, **Grafana**, **Grafana Loki**, and **Grafana Tempo**, providing deep visibility into every millisecond of request execution:
+
+</div>
 
 ### 1. Real-Time Grafana Dashboards
 
 #### A. Platform Operations & Global Ingestion Dashboard
+
+<div align="justify">
+
 Monitors global notification throughput, outbox drain rates, active queue depths, and end-to-end delivery success percentages in real time:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Grafana Operations Overview Dashboard" src="./assets/screenshots/10-grafana-overview.png" />
@@ -273,7 +374,12 @@ Monitors global notification throughput, outbox drain rates, active queue depths
 <br/>
 
 #### B. Delivery Latency & Channel Performance Dashboard
+
+<div align="justify">
+
 Tracks delivery attempt durations, percentile curves (p50, p95, p99), and throughput across Email, Webhook, and In-App:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Grafana Delivery Latency Dashboard" src="./assets/screenshots/11-grafana-delivery.png" />
@@ -282,7 +388,12 @@ Tracks delivery attempt durations, percentile curves (p50, p95, p99), and throug
 <br/>
 
 #### C. System Infrastructure & JVM Telemetry Dashboard
+
+<div align="justify">
+
 Live telemetry inspecting HikariCP connection pool health, JVM G1 garbage collection pauses, process memory, and CPU utilization:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Grafana System Health Dashboard" src="./assets/screenshots/12-grafana-system-health.png" />
@@ -291,7 +402,12 @@ Live telemetry inspecting HikariCP connection pool health, JVM G1 garbage collec
 <br/>
 
 #### D. Kafka Transport & Broker Metrics Dashboard
+
+<div align="justify">
+
 Monitors message publish rates, partition distribution, consumer fetch lag, and consumer group rebalance health:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Grafana Kafka Transport Dashboard" src="./assets/screenshots/13-grafana-kafka-transport.png" />
@@ -300,7 +416,12 @@ Monitors message publish rates, partition distribution, consumer fetch lag, and 
 ---
 
 ### 2. Distributed Logging with Grafana Loki
+
+<div align="justify">
+
 Structured JSON logs tagged with `trace_id`, `span_id`, and `tenant_id` enable instant end-to-end tracing across ingestion, Kafka, and channel workers:
+
+</div>
 
 <div align="center">
   <img width="1120" alt="Loki Structured Logs in Grafana Explore" src="./assets/screenshots/14-loki-structured-logs.png" />
@@ -314,7 +435,12 @@ Structured JSON logs tagged with `trace_id`, `span_id`, and `tenant_id` enable i
 ---
 
 ### 3. Distributed Tracing with Grafana Tempo
+
+<div align="justify">
+
 Complete distributed trace waterfalls captured via OpenTelemetry W3C propagation, visualizing execution timings from initial HTTP acceptance down to outbound provider response with microsecond precision:
+
+</div>
 
 <div align="center">
   <img width="1120" alt="Tempo Distributed Trace Waterfall" src="./assets/screenshots/15-tempo-distributed-trace.png" />
@@ -323,7 +449,12 @@ Complete distributed trace waterfalls captured via OpenTelemetry W3C propagation
 ---
 
 ### 4. Platform Admin Telemetry Console
+
+<div align="justify">
+
 Live operator console inspecting connection pool saturation, Kafka partition lag, and circuit breaker states:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Admin System Health & Telemetry" src="./assets/screenshots/16-admin-telemetry-console.png" />
@@ -333,7 +464,13 @@ Live operator console inspecting connection pool saturation, Kafka partition lag
 
 ## Performance & K6 Load Testing
 
-Notify's performance was empirically benchmarked using **k6** under sustained concurrent virtual user (VU) stress tests against strict operational thresholds (**p95 latency < 50ms**, **0.00% error rate**, **0 dropped requests**).
+<div align="justify">
+
+Notify's performance was benchmarked under sustained concurrent virtual user (VU) stress tests using **k6** against strict operational thresholds (**p95 latency < 50ms**, **0.00% error rate**, **0 dropped requests**).
+
+* **What do percentiles mean?** In performance engineering, the **p50** (median) means 50% of requests finished faster than that number. The **p95** means 95% of all requests finished under that duration—representing the real-world experience during peak traffic spikes.
+
+</div>
 
 <div align="center">
   <img width="1080" alt="k6 Load Test Benchmark Results" src="./assets/screenshots/17-k6-load-benchmark.png" />
@@ -364,10 +501,19 @@ k6 run --vus 120 --duration 2m scripts/perf/k6-notification-load.js
 
 ## Management Console & UI Walkthrough
 
-Notify includes a full-featured React 19 web application providing distinct, role-based workflows for both API tenants and platform operators.
+<div align="justify">
+
+Notify includes a full-featured React 19 web application providing distinct, role-based workflows for both API tenants and platform operators:
+
+</div>
 
 ### 1. Interactive Real-Time Demo Inbox
+
+<div align="justify">
+
 Public interactive sandbox demonstrating sub-50ms live notification streaming over Server-Sent Events (SSE) with interactive dispatch simulation:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Real-Time Demo Inbox" src="./assets/screenshots/02-demo-inbox.png" />
@@ -376,7 +522,12 @@ Public interactive sandbox demonstrating sub-50ms live notification streaming ov
 ---
 
 ### 2. Tenant Dashboard & Analytics
+
+<div align="justify">
+
 Tenant overview presenting 24-hour delivery volume graphs, channel success distributions, and recent dispatches:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Tenant Dashboard & Analytics" src="./assets/screenshots/03-tenant-dashboard.png" />
@@ -385,7 +536,12 @@ Tenant overview presenting 24-hour delivery volume graphs, channel success distr
 ---
 
 ### 3. Notification Explorer & Lifecycle Timeline
+
+<div align="justify">
+
 Inspect every dispatched notification with status badges, retry attempt timelines, recipient details, and error diagnostics:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Notifications Explorer & Detail" src="./assets/screenshots/04-notifications-explorer.png" />
@@ -394,7 +550,12 @@ Inspect every dispatched notification with status badges, retry attempt timeline
 ---
 
 ### 4. Template Designer & Dynamic Variable Substitution
+
+<div align="justify">
+
 Create, version, test, and publish localized notification templates across Email, Webhook, and In-App payloads:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Template Designer" src="./assets/screenshots/05-templates-manager.png" />
@@ -403,7 +564,12 @@ Create, version, test, and publish localized notification templates across Email
 ---
 
 ### 5. Scoped API Key Management
+
+<div align="justify">
+
 Provision scoped API keys (`notifications:send`, `templates:read`) with SHA-256 storage, single-reveal tokens, and instant revocation:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="API Key Management" src="./assets/screenshots/06-api-keys-management.png" />
@@ -412,7 +578,12 @@ Provision scoped API keys (`notifications:send`, `templates:read`) with SHA-256 
 ---
 
 ### 6. Platform Operator Admin Console
+
+<div align="justify">
+
 Cross-tenant operational oversight for infrastructure administrators, tracking platform-wide throughput and tenant account health:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Platform Operator Overview" src="./assets/screenshots/07-admin-overview.png" />
@@ -421,7 +592,12 @@ Cross-tenant operational oversight for infrastructure administrators, tracking p
 ---
 
 ### 7. System Health & Infrastructure Telemetry
+
+<div align="justify">
+
 Real-time operational dashboard monitoring database connection pool saturation, JVM memory, Kafka consumer lag, and circuit breaker status:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="System Health & Infrastructure" src="./assets/screenshots/08-admin-system-health.png" />
@@ -430,7 +606,12 @@ Real-time operational dashboard monitoring database connection pool saturation, 
 ---
 
 ### 8. Dead Letter Queue (DLQ) Workbench & Replay
+
+<div align="justify">
+
 Inspect unrecoverable messages, analyze terminal failure reasons, and execute bulk message replays directly from the operator UI:
+
+</div>
 
 <div align="center">
   <img width="1280" alt="Dead Letter Queue Workbench" src="./assets/screenshots/09-admin-dlq-workbench.png" />
@@ -526,23 +707,27 @@ erDiagram
 
 ## Known Limitations & Distributed Systems Trade-offs
 
-Engineering honesty regarding architectural trade-offs is a core principle:
+<div align="justify">
 
-1. **Physical Impossibility of Universal Exactly-Once Delivery over Remote HTTP**:
-   While Notify guarantees strict **at-least-once downstream delivery** and internal deduplication, remote third-party providers (e.g., SMTP servers) may occasionally accept a message and drop their connection before returning a 250 OK. In such rare network splits, Notify will safely retry, which can result in the upstream provider receiving the message again. This is an unavoidable consequence of the **Two Generals' Problem** over distributed networks.
-2. **Provider Webhook Clock Drift**:
+Engineering honesty regarding architectural trade-offs is a core foundational principle of Notify:
+
+1. **Physical Impossibility of Universal Exactly-Once Delivery over Remote HTTP**:  
+   While Notify guarantees strict **at-least-once downstream delivery** and internal deduplication, remote third-party providers (such as SMTP mail servers or remote webhook receivers) may occasionally accept a message and drop their network connection before returning an HTTP `200 OK` or SMTP `250 OK`. In such network splits, Notify will safely retry, which can result in the upstream provider receiving the message again. This is an unavoidable consequence of the **Two Generals' Problem** over distributed networks.
+2. **Provider Webhook Clock Drift**:  
    Webhook replay verification enforces a 300-second timestamp drift tolerance. Client servers with severe system clock skew (> 5 minutes) must calibrate their NTP daemons to prevent replay verification rejections.
-3. **In-Memory Rate Limiting Fail-Open Behavior**:
+3. **In-Memory Rate Limiting Fail-Open Behavior**:  
    In the event of a catastrophic Redis cluster outage, the rate-limiting tier is designed to **fail open** rather than blocking legitimate production notification dispatches.
+
+</div>
 
 ---
 
 ## Local Setup
 
 ### Prerequisites
-- **Docker Engine 24+ & Docker Compose v2+**
-- **Java 25 LTS** (for local backend compilation)
-- **Node.js 20+** (for frontend development)
+* **Docker Engine 24+ & Docker Compose v2+**
+* **Java 25 LTS** (for local backend compilation)
+* **Node.js 20+** (for frontend development)
 
 ### 1. Clone & Configure Environment
 ```bash
@@ -557,13 +742,13 @@ docker compose -f infra/docker-compose.yml up -d
 ```
 
 This provisions:
-- **PostgreSQL 16** (`localhost:5432`)
-- **Apache Kafka + KRaft** (`localhost:9092`)
-- **Redis 7.2** (`localhost:6379`)
-- **Prometheus** (`localhost:9090`)
-- **Grafana** (`localhost:3000` — credentials: `admin` / `admin`)
-- **Grafana Loki** (`localhost:3100`)
-- **Grafana Tempo** (`localhost:3200`)
+* **PostgreSQL 16** (`localhost:5432`)
+* **Apache Kafka + KRaft** (`localhost:9092`)
+* **Redis 7.2** (`localhost:6379`)
+* **Prometheus** (`localhost:9090`)
+* **Grafana** (`localhost:3000` — credentials: `admin` / `admin`)
+* **Grafana Loki** (`localhost:3100`)
+* **Grafana Tempo** (`localhost:3200`)
 
 ### 3. Run Backend Service
 ```bash
@@ -583,7 +768,11 @@ Navigate to `http://localhost:5173` to access the web application.
 
 ## API Reference
 
-Full OpenAPI Swagger documentation is available at `http://localhost:8080/swagger-ui.html`.
+<div align="justify">
+
+Full OpenAPI Swagger interactive documentation is available at `http://localhost:8080/swagger-ui.html`.
+
+</div>
 
 ### Endpoints Overview
 
