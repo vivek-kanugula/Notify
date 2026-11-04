@@ -9,6 +9,7 @@ import {
   type TemplateDetail,
   type TemplateVersion,
   type TemplateContentType,
+  type CreateVersionRequest,
 } from '../api/templates';
 import { extractTemplateVariables, interpolateTemplateVariables } from '../components/templateVariableUtils';
 import SandboxedIframe from '../components/SandboxedIframe';
@@ -25,6 +26,7 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
+  X,
 } from 'lucide-react';
 
 export default function TemplateDetailPage() {
@@ -54,6 +56,15 @@ export default function TemplateDetailPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
+  // New Version Modal state
+  const [showNewVersionModal, setShowNewVersionModal] = useState(false);
+  const [newVersionCloneSource, setNewVersionCloneSource] = useState<number | 'blank'>(1);
+  const [newVersionSubject, setNewVersionSubject] = useState('');
+  const [newVersionBody, setNewVersionBody] = useState('');
+  const [newVersionContentType, setNewVersionContentType] = useState<TemplateContentType>('TEXT');
+  const [creatingVersion, setCreatingVersion] = useState(false);
+  const [createVersionError, setCreateVersionError] = useState<string | null>(null);
+
   const fetchTemplateDetail = async (templateId: string, preferredVersionNumber?: number) => {
     try {
       setLoading(true);
@@ -63,7 +74,7 @@ export default function TemplateDetailPage() {
 
       const targetVersionNum =
         preferredVersionNumber ??
-        data.currentVersion?.versionNumber ??
+        data.versions.find((v) => v.status === 'PUBLISHED')?.versionNumber ??
         (data.versions.length > 0 ? data.versions[0].versionNumber : null);
 
       if (targetVersionNum !== null) {
@@ -108,6 +119,25 @@ export default function TemplateDetailPage() {
   // Detected variables in current editor content
   const detectedVariables = extractTemplateVariables(subject, body);
 
+  const isDirty = activeVersion?.status === 'DRAFT' && (
+    (activeVersion.subject || '') !== subject ||
+    (activeVersion.body || '') !== body ||
+    (activeVersion.contentType || 'TEXT') !== contentType
+  );
+
+  const handleSelectVersion = (verNum: number) => {
+    if (verNum === activeVersionNumber) return;
+    if (isDirty) {
+      const confirmDiscard = window.confirm(
+        'You have unsaved changes in the current draft. Discard changes and switch version?'
+      );
+      if (!confirmDiscard) return;
+    }
+    if (template) {
+      selectVersion(template, verNum);
+    }
+  };
+
   const handleSaveDraft = async () => {
     if (!id || !activeVersionNumber || isImmutable) return;
     try {
@@ -131,19 +161,84 @@ export default function TemplateDetailPage() {
     }
   };
 
-  const handleCreateDraftFromVersion = async (sourceVersionNumber: number) => {
+  const openNewVersionModal = (preferredSourceVer?: number) => {
+    const srcNum = preferredSourceVer ?? activeVersionNumber ?? (template?.versions.length ? template.versions[0].versionNumber : 1);
+    const srcVer = template?.versions.find(v => v.versionNumber === srcNum);
+    setNewVersionCloneSource(srcNum);
+
+    // If cloning from the active version, prioritize the current editor state so in-progress inputs are preserved!
+    if (srcNum === activeVersionNumber) {
+      setNewVersionSubject(subject);
+      setNewVersionBody(body);
+      setNewVersionContentType(contentType);
+    } else if (srcVer) {
+      setNewVersionSubject(srcVer.subject || '');
+      setNewVersionBody(srcVer.body || '');
+      setNewVersionContentType(srcVer.contentType || 'TEXT');
+    } else {
+      setNewVersionSubject('');
+      setNewVersionBody('');
+      setNewVersionContentType('TEXT');
+    }
+
+    setCreateVersionError(null);
+    setShowNewVersionModal(true);
+  };
+
+  const handleCloneSourceChange = (val: string) => {
+    if (val === 'blank') {
+      setNewVersionCloneSource('blank');
+      setNewVersionSubject('');
+      setNewVersionBody('');
+    } else {
+      const num = Number(val);
+      setNewVersionCloneSource(num);
+      if (num === activeVersionNumber) {
+        setNewVersionSubject(subject);
+        setNewVersionBody(body);
+        setNewVersionContentType(contentType);
+      } else {
+        const srcVer = template?.versions.find(v => v.versionNumber === num);
+        if (srcVer) {
+          setNewVersionSubject(srcVer.subject || '');
+          setNewVersionBody(srcVer.body || '');
+          setNewVersionContentType(srcVer.contentType || 'TEXT');
+        }
+      }
+    }
+  };
+
+  const handleCreateVersionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!id || isSuspended) return;
+
+    if (!newVersionBody.trim()) {
+      setCreateVersionError('Template body is required');
+      return;
+    }
+    if (template?.channel === 'EMAIL' && !newVersionSubject.trim()) {
+      setCreateVersionError('Subject is required for EMAIL templates');
+      return;
+    }
+
     try {
-      setSaving(true);
-      setEditorError(null);
-      const newVersion = await createDraftVersion(id, {
-        cloneFromVersion: sourceVersionNumber,
-      });
-      await fetchTemplateDetail(id, newVersion.versionNumber);
+      setCreatingVersion(true);
+      setCreateVersionError(null);
+
+      const request: CreateVersionRequest = {
+        cloneFromVersion: newVersionCloneSource === 'blank' ? undefined : Number(newVersionCloneSource),
+        subject: template?.channel === 'EMAIL' ? newVersionSubject.trim() || undefined : undefined,
+        body: newVersionBody.trim(),
+        contentType: newVersionContentType,
+      };
+
+      const newVer = await createDraftVersion(id, request);
+      setShowNewVersionModal(false);
+      await fetchTemplateDetail(id, newVer.versionNumber);
     } catch (err: any) {
-      setEditorError(err.message || 'Failed to create new draft version');
+      setCreateVersionError(err.message || 'Failed to create new version');
     } finally {
-      setSaving(false);
+      setCreatingVersion(false);
     }
   };
 
@@ -152,6 +247,27 @@ export default function TemplateDetailPage() {
     try {
       setPublishing(true);
       setPublishError(null);
+
+      // Auto-save the active draft before publishing so all recent edits are applied!
+      if (activeVersion?.status === 'DRAFT') {
+        if (!body.trim()) {
+          setPublishError('Template body cannot be blank');
+          setPublishing(false);
+          return;
+        }
+        if (template?.channel === 'EMAIL' && !subject.trim()) {
+          setPublishError('Subject is required for EMAIL templates');
+          setPublishing(false);
+          return;
+        }
+
+        await updateDraftVersion(id, activeVersionNumber, {
+          subject: template?.channel === 'EMAIL' ? subject.trim() || undefined : undefined,
+          body: body.trim(),
+          contentType,
+        });
+      }
+
       await publishVersion(id, activeVersionNumber);
       setShowPublishModal(false);
       await fetchTemplateDetail(id, activeVersionNumber);
@@ -258,11 +374,11 @@ export default function TemplateDetailPage() {
             </div>
             <button
               type="button"
-              onClick={() => handleCreateDraftFromVersion(activeVersionNumber || 1)}
+              onClick={() => openNewVersionModal(activeVersionNumber || 1)}
               disabled={isSuspended}
               className="btn btn-secondary"
               style={{ padding: '4px 8px', fontSize: 11 }}
-              title="Create new draft from active version"
+              title="Create new draft version"
             >
               <Plus size={12} /> New Draft
             </button>
@@ -278,7 +394,7 @@ export default function TemplateDetailPage() {
                 <button
                   key={ver.id}
                   type="button"
-                  onClick={() => selectVersion(template, ver.versionNumber)}
+                  onClick={() => handleSelectVersion(ver.versionNumber)}
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -303,7 +419,7 @@ export default function TemplateDetailPage() {
                       <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: isActive ? 'var(--color-signal)' : 'var(--color-harbor)' }}>
                         v{ver.versionNumber}
                       </span>
-                      {template.currentVersion?.versionNumber === ver.versionNumber && (
+                      {ver.status === 'PUBLISHED' && (
                         <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', padding: '1px 5px', borderRadius: 3, background: 'var(--color-chalk)', color: 'var(--color-ink-2)' }}>
                           Active
                         </span>
@@ -390,7 +506,7 @@ export default function TemplateDetailPage() {
                 {isImmutable && (
                   <button
                     type="button"
-                    onClick={() => handleCreateDraftFromVersion(activeVersionNumber || 1)}
+                    onClick={() => openNewVersionModal(activeVersionNumber || 1)}
                     disabled={isSuspended}
                     className="btn btn-secondary"
                     style={{ fontSize: 12 }}
@@ -744,6 +860,134 @@ export default function TemplateDetailPage() {
                 {publishing ? 'Publishing…' : `Publish v${activeVersionNumber}`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create New Version Dialog */}
+      {showNewVersionModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: 540 }}>
+            <form onSubmit={handleCreateVersionSubmit}>
+              <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-harbor)' }}>
+                  Create New Version (v{(template?.versions.length ? Math.max(...template.versions.map(v => v.versionNumber)) : 0) + 1} Draft)
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNewVersionModal(false)}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, color: 'var(--color-ink-2)' }}
+                  aria-label="Close dialog"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', marginBottom: 6 }}>
+                    Base / Clone Source:
+                  </label>
+                  <select
+                    value={newVersionCloneSource}
+                    onChange={(e) => handleCloneSourceChange(e.target.value)}
+                    className="select-control"
+                    style={{ width: '100%', fontSize: 12, padding: '7px 10px' }}
+                  >
+                    {template?.versions.map((v) => (
+                      <option key={v.versionNumber} value={v.versionNumber}>
+                        Clone from v{v.versionNumber} ({v.status}) {v.versionNumber === activeVersionNumber ? '— Current' : ''}
+                      </option>
+                    ))}
+                    <option value="blank">Start Blank (No Clone)</option>
+                  </select>
+                </div>
+
+                {template?.channel === 'EMAIL' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', marginBottom: 6 }}>
+                      Subject Line:
+                    </label>
+                    <input
+                      type="text"
+                      value={newVersionSubject}
+                      onChange={(e) => setNewVersionSubject(e.target.value)}
+                      placeholder="Welcome to {{company}}!"
+                      className="input-text"
+                      style={{ width: '100%', fontSize: 12 }}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)' }}>
+                      Message Body:
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>Format:</span>
+                      <select
+                        value={newVersionContentType}
+                        onChange={(e) => setNewVersionContentType(e.target.value as TemplateContentType)}
+                        className="select-control"
+                        style={{ fontSize: 11, padding: '3px 8px', width: 'auto' }}
+                      >
+                        <option value="TEXT">Plain Text</option>
+                        <option value="HTML">HTML</option>
+                      </select>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={8}
+                    value={newVersionBody}
+                    onChange={(e) => setNewVersionBody(e.target.value)}
+                    placeholder="Enter template body with optional {{variables}}..."
+                    className="input-text mono"
+                    style={{
+                      width: '100%',
+                      lineHeight: 1.5,
+                      fontSize: 12,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                    }}
+                  />
+                </div>
+
+                {createVersionError && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: 'var(--color-st-failed-bg)',
+                      border: '1px solid var(--color-st-failed)',
+                      borderRadius: 'var(--radius-control)',
+                      color: 'var(--color-st-failed)',
+                      fontSize: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <AlertCircle size={14} />
+                    {createVersionError}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowNewVersionModal(false)}
+                  className="btn btn-secondary"
+                  disabled={creatingVersion}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingVersion}
+                  className="btn btn-primary"
+                >
+                  {creatingVersion ? 'Creating Version…' : 'Create Version'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

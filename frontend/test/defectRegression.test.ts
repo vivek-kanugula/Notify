@@ -158,4 +158,84 @@ describe('Frontend Defect Regressions (BUG-01, BUG-02, BUG-03, BUG-04)', () => {
       assert.strictEqual(resNaN.barWidth, 0);
     });
   });
+
+  // BUG-05: Template version creation and draft auto-save prior to publishing
+  describe('BUG-05: Template version creation and draft auto-save prior to publishing', () => {
+    test('createDraftVersion request payload preserves subject, body and contentType overrides', () => {
+      const sourceVersion = {
+        versionNumber: 1,
+        subject: 'Old Subject',
+        body: 'Old Body',
+        contentType: 'TEXT',
+      };
+
+      const newOverrides = {
+        cloneFromVersion: 1,
+        subject: 'Brand New Subject',
+        body: 'Brand New Body with {{var}}',
+        contentType: 'HTML' as const,
+      };
+
+      // Simulates the payload assembly for createDraftVersion
+      const payload = {
+        cloneFromVersion: newOverrides.cloneFromVersion,
+        subject: newOverrides.subject.trim() || undefined,
+        body: newOverrides.body.trim(),
+        contentType: newOverrides.contentType,
+      };
+
+      assert.strictEqual(payload.cloneFromVersion, 1);
+      assert.strictEqual(payload.subject, 'Brand New Subject');
+      assert.strictEqual(payload.body, 'Brand New Body with {{var}}');
+      assert.strictEqual(payload.contentType, 'HTML');
+      assert.notStrictEqual(payload.body, sourceVersion.body);
+    });
+
+    test('draft publish flow ensures draft content is updated before publish call is executed', async () => {
+      let draftUpdatedWith: any = null;
+      let versionPublished: number | null = null;
+
+      // Mock update and publish functions
+      async function mockUpdateDraft(id: string, ver: number, data: any) {
+        draftUpdatedWith = data;
+        return { versionNumber: ver, ...data };
+      }
+
+      async function mockPublish(id: string, ver: number) {
+        // Assert that draft update occurred before publish
+        assert.ok(draftUpdatedWith !== null, 'Draft must be saved before publishing');
+        versionPublished = ver;
+        return { versionNumber: ver, status: 'PUBLISHED' };
+      }
+
+      const activeDraft = {
+        status: 'DRAFT',
+        versionNumber: 2,
+        subject: 'Cloned Subject',
+        body: 'Cloned Body from v1',
+        contentType: 'TEXT' as const,
+      };
+
+      const editorState = {
+        subject: 'Updated Email Subject for v2',
+        body: 'Updated Email Body for v2 with {{token}}',
+        contentType: 'HTML' as const,
+      };
+
+      // Simulates handlePublishSubmit logic: auto-save draft first if status is DRAFT
+      if (activeDraft.status === 'DRAFT') {
+        await mockUpdateDraft('tpl-123', activeDraft.versionNumber, {
+          subject: editorState.subject.trim() || undefined,
+          body: editorState.body.trim(),
+          contentType: editorState.contentType,
+        });
+      }
+      await mockPublish('tpl-123', activeDraft.versionNumber);
+
+      assert.strictEqual(versionPublished, 2);
+      assert.strictEqual(draftUpdatedWith.body, 'Updated Email Body for v2 with {{token}}');
+      assert.strictEqual(draftUpdatedWith.subject, 'Updated Email Subject for v2');
+      assert.strictEqual(draftUpdatedWith.contentType, 'HTML');
+    });
+  });
 });

@@ -398,6 +398,30 @@ class TemplateIntegrationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.subject").value("Updated Subject {{orderId}}"))
                 .andExpect(jsonPath("$.body").value("Hello {{customer}}, here is invoice {{orderId}} for amount {{amount}}."));
 
+        // 2b. Clone version 1 into draft version 4 with body override
+        CreateVersionRequest bodyOverrideReq = new CreateVersionRequest(1, null, "Overridden body for {{customer}} with discount {{discount}}.", null);
+        mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bodyOverrideReq)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(4))
+                .andExpect(jsonPath("$.subject").value("Invoice for {{orderId}}"))
+                .andExpect(jsonPath("$.body").value("Overridden body for {{customer}} with discount {{discount}}."))
+                .andExpect(jsonPath("$.variables", containsInAnyOrder("customer", "discount", "orderId")));
+
+        // 2c. Clone version 1 into draft version 5 with both subject and body override
+        CreateVersionRequest bothReq = new CreateVersionRequest(1, "Special Notice {{orderId}}", "Special body {{orderId}} for {{amount}}", ContentType.TEXT);
+        mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions")
+                        .header("Authorization", "Bearer " + tenant.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bothReq)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber").value(5))
+                .andExpect(jsonPath("$.subject").value("Special Notice {{orderId}}"))
+                .andExpect(jsonPath("$.body").value("Special body {{orderId}} for {{amount}}"))
+                .andExpect(jsonPath("$.variables", containsInAnyOrder("amount", "orderId")));
+
         // 3. Attempting to clone non-existent version returns 404 NOT_FOUND
         CreateVersionRequest invalidCloneReq = new CreateVersionRequest(99, null, null, null);
         mockMvc.perform(post("/api/v1/templates/" + templateId + "/versions")

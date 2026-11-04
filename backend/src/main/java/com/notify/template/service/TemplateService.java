@@ -235,15 +235,23 @@ public class TemplateService {
                     .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND,
                             "Source template version not found: " + request.cloneFromVersion()));
 
-            subject = request.subject() != null ? request.subject() : sourceVersion.getSubject();
-            body = (request.body() != null && !request.body().isBlank()) ? request.body() : sourceVersion.getBody();
+            String reqSubject = (request.subject() != null && !request.subject().isBlank())
+                    ? request.subject().trim()
+                    : null;
+            subject = reqSubject != null ? reqSubject : sourceVersion.getSubject();
+
+            String reqBody = (request.body() != null && !request.body().isBlank())
+                    ? request.body().trim()
+                    : null;
+            body = reqBody != null ? reqBody : sourceVersion.getBody();
+
             contentType = request.contentType() != null ? request.contentType() : sourceVersion.getContentType();
         } else {
             if (request.body() == null || request.body().isBlank()) {
                 throw new NotifyException(ErrorCode.VALIDATION_FAILED, "Template body cannot be blank");
             }
-            subject = request.subject();
-            body = request.body();
+            subject = (request.subject() != null && !request.subject().isBlank()) ? request.subject().trim() : null;
+            body = request.body().trim();
             contentType = request.contentType() != null ? request.contentType() : ContentType.TEXT;
         }
 
@@ -321,24 +329,33 @@ public class TemplateService {
                     "Published and archived template versions are immutable and cannot be modified");
         }
 
-        validateChannelAndContent(template.getChannel(), request.subject(), request.body());
+        String trimmedSubject = (request.subject() != null && !request.subject().isBlank())
+                ? request.subject().trim()
+                : null;
+        String trimmedBody = request.body().trim();
 
-        renderingEngine.validateTemplateSyntax(request.body());
-        if (request.subject() != null) {
-            renderingEngine.validateTemplateSyntax(request.subject());
+        validateChannelAndContent(template.getChannel(), trimmedSubject, trimmedBody);
+
+        renderingEngine.validateTemplateSyntax(trimmedBody);
+        if (trimmedSubject != null) {
+            renderingEngine.validateTemplateSyntax(trimmedSubject);
         }
 
-        List<String> variables = renderingEngine.extractVariables(request.body(), request.subject());
+        List<String> variables = renderingEngine.extractVariables(trimmedBody, trimmedSubject);
         ContentType contentType = request.contentType() != null
                 ? request.contentType()
                 : version.getContentType();
 
-        version.setSubject(request.subject());
-        version.setBody(request.body());
+        version.setSubject(trimmedSubject);
+        version.setBody(trimmedBody);
         version.setContentType(contentType);
         version.setVariables(variables);
-        version.setUpdatedAt(Instant.now(clock));
+        Instant now = Instant.now(clock);
+        version.setUpdatedAt(now);
         version = templateVersionRepository.save(version);
+
+        template.setUpdatedAt(now);
+        templateRepository.save(template);
 
         return toVersionResponse(version);
     }

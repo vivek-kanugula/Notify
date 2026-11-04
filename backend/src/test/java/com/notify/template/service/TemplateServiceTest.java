@@ -320,6 +320,61 @@ class TemplateServiceTest {
     }
 
     @Test
+    @DisplayName("Create draft version clones with body override")
+    void createDraftVersionCloneWithBodyOverride() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Order Placed", Channel.EMAIL, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity sourceVersion = new TemplateVersionEntity(
+                tenantId, templateId, 1, TemplateVersionStatus.PUBLISHED,
+                "Old Subject {{orderId}}", "Old body with {{oldVar}}", ContentType.TEXT, List.of("oldVar", "orderId")
+        );
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, 1))
+                .thenReturn(Optional.of(sourceVersion));
+        when(templateVersionRepository.findMaxVersionNumberByTemplateId(templateId)).thenReturn(Optional.of(1));
+        when(templateVersionRepository.save(any(TemplateVersionEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        CreateVersionRequest cloneReq = new CreateVersionRequest(1, null, "Brand new body with {{newVar}}", null);
+        TemplateVersionResponse cloned = templateService.createDraftVersion(tenantId, templateId, cloneReq);
+
+        assertThat(cloned.versionNumber()).isEqualTo(2);
+        assertThat(cloned.subject()).isEqualTo("Old Subject {{orderId}}");
+        assertThat(cloned.body()).isEqualTo("Brand new body with {{newVar}}");
+        assertThat(cloned.variables()).containsExactlyInAnyOrder("newVar", "orderId");
+    }
+
+    @Test
+    @DisplayName("Create draft version clones with both subject and body override")
+    void createDraftVersionCloneWithBothSubjectAndBodyOverride() {
+        UUID templateId = UUID.randomUUID();
+        TemplateEntity template = new TemplateEntity(tenantId, "Order Placed", Channel.EMAIL, null);
+        template.setId(templateId);
+
+        TemplateVersionEntity sourceVersion = new TemplateVersionEntity(
+                tenantId, templateId, 1, TemplateVersionStatus.PUBLISHED,
+                "Old Subject", "Old body", ContentType.TEXT, List.of()
+        );
+
+        when(templateRepository.findByIdAndTenantIdForUpdate(templateId, tenantId)).thenReturn(Optional.of(template));
+        when(templateVersionRepository.findByTenantIdAndTemplateIdAndVersionNumber(tenantId, templateId, 1))
+                .thenReturn(Optional.of(sourceVersion));
+        when(templateVersionRepository.findMaxVersionNumberByTemplateId(templateId)).thenReturn(Optional.of(1));
+        when(templateVersionRepository.save(any(TemplateVersionEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        CreateVersionRequest cloneReq = new CreateVersionRequest(1, "Updated Subject {{subVar}}", "Updated Body {{bodyVar}}", ContentType.HTML);
+        TemplateVersionResponse cloned = templateService.createDraftVersion(tenantId, templateId, cloneReq);
+
+        assertThat(cloned.versionNumber()).isEqualTo(2);
+        assertThat(cloned.subject()).isEqualTo("Updated Subject {{subVar}}");
+        assertThat(cloned.body()).isEqualTo("Updated Body {{bodyVar}}");
+        assertThat(cloned.contentType()).isEqualTo(ContentType.HTML);
+        assertThat(cloned.variables()).containsExactlyInAnyOrder("subVar", "bodyVar");
+    }
+
+    @Test
     @DisplayName("Create draft version clone rejects non-existent source version with NOT_FOUND (404)")
     void createDraftVersionCloneNotFound() {
         UUID templateId = UUID.randomUUID();
