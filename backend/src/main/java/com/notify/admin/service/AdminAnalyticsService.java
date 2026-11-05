@@ -51,7 +51,12 @@ public class AdminAnalyticsService {
         long failed = 0;
         long cancelled = 0;
         long active = 0;
+        Map<String, Long> statusCounts = new java.util.HashMap<>();
+        for (com.notify.common.model.NotificationStatus s : com.notify.common.model.NotificationStatus.values()) {
+            statusCounts.put(s.name(), 0L);
+        }
         for (StatusCount sc : notificationQueryService.statusCountsGlobal(from, to)) {
+            statusCounts.put(sc.status().name(), sc.count());
             total += sc.count();
             switch (sc.status()) {
                 case DELIVERED -> delivered += sc.count();
@@ -92,7 +97,7 @@ public class AdminAnalyticsService {
                 new AdminAnalyticsOverviewResponse.LatencyPercentilesMs(p.p50(), p.p95(), p.p99()),
                 notificationQueryService.queueDepthGlobal(),
                 notificationQueryService.dlqCountGlobal(),
-                topTenants, topFailures);
+                topTenants, topFailures, statusCounts);
     }
 
     @Transactional(readOnly = true)

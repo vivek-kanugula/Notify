@@ -113,6 +113,13 @@ class AdminAnalyticsControllerTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.deliveredCount").value(2))
                 .andExpect(jsonPath("$.failedCount").value(2)) // FAILED + DLQ
                 .andExpect(jsonPath("$.activeCount").value(1))  // QUEUED (windowed)
+                .andExpect(jsonPath("$.statusCounts.DELIVERED").value(2))
+                .andExpect(jsonPath("$.statusCounts.FAILED").value(1))
+                .andExpect(jsonPath("$.statusCounts.DLQ").value(1))
+                .andExpect(jsonPath("$.statusCounts.QUEUED").value(1))
+                .andExpect(jsonPath("$.statusCounts.PROCESSING").value(0))
+                .andExpect(jsonPath("$.statusCounts.SCHEDULED").value(0))
+                .andExpect(jsonPath("$.statusCounts.RETRYING").value(0))
                 // queueDepth/dlqOpenCount are point-in-time global (not windowed); assert >= our seeded rows
                 // so the shared-DB cumulative gate cannot make them flaky.
                 .andExpect(jsonPath("$.queueDepth").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))

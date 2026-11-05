@@ -44,6 +44,16 @@ describe('adminAnalytics.ts API request serialization & contract enforcement', (
             topFailureReasons: [
               { reason: 'PROVIDER_RATE_LIMITED', count: 210 },
             ],
+            statusCounts: {
+              DELIVERED: 14890,
+              FAILED: 415,
+              DLQ: 5,
+              CANCELLED: 80,
+              QUEUED: 12,
+              PROCESSING: 18,
+              SCHEDULED: 0,
+              RETRYING: 0,
+            },
           }),
         } as any;
       }
@@ -86,6 +96,8 @@ describe('adminAnalytics.ts API request serialization & contract enforcement', (
     assert.strictEqual(res.totalNotifications, 15420);
     assert.strictEqual(res.deliveredCount, 14890);
     assert.strictEqual(res.dlqOpenCount, 5);
+    assert.strictEqual(res.statusCounts?.DELIVERED, 14890);
+    assert.strictEqual(res.statusCounts?.QUEUED, 12);
   });
 
   test('getAdminTenantUsage calls correct tenant endpoint and parses breakdown', async () => {

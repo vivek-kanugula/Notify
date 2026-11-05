@@ -17,35 +17,42 @@ import {
 export default function AdminNotificationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Filter state directly from URL search params (single source of truth)
+  const tenantNameParam = searchParams.get('tenantName') || '';
+  const tenantIdParam = searchParams.get('tenantId') || '';
+  const statusParam = (searchParams.get('status') as NotificationStatus) || '';
+  const channelParam = (searchParams.get('channel') as 'EMAIL' | 'WEBHOOK' | 'IN_APP') || '';
+  const pageParam = parseInt(searchParams.get('page') || '0', 10);
+
   const [notifications, setNotifications] = useState<AdminNotificationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Read filters from URL search params
-  const initialTenantName = searchParams.get('tenantName') || '';
-  const initialTenantId = searchParams.get('tenantId') || '';
-  const initialStatus = (searchParams.get('status') as NotificationStatus) || '';
-  const initialChannel = (searchParams.get('channel') as 'EMAIL' | 'WEBHOOK' | 'IN_APP') || '';
-  const initialPage = parseInt(searchParams.get('page') || '0', 10);
-
-  const [tenantName, setTenantName] = useState(initialTenantName);
-  const [tenantId, setTenantId] = useState(initialTenantId);
-  const [status, setStatus] = useState<NotificationStatus | ''>(initialStatus);
-  const [channel, setChannel] = useState<'EMAIL' | 'WEBHOOK' | 'IN_APP' | ''>(initialChannel);
-  const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+
+  const updateParam = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === 'ALL') {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+    if (key !== 'page') {
+      next.delete('page');
+    }
+    setSearchParams(next);
+  };
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await searchAdminNotifications({
-        tenantName: tenantName.trim() || undefined,
-        tenantId: tenantId.trim() || undefined,
-        status: status || undefined,
-        channel: channel || undefined,
-        page,
+        tenantName: tenantNameParam.trim() || undefined,
+        tenantId: tenantIdParam.trim() || undefined,
+        status: statusParam || undefined,
+        channel: channelParam || undefined,
+        page: pageParam,
         size: 20,
       });
       setNotifications(data.content);
@@ -56,20 +63,11 @@ export default function AdminNotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantName, tenantId, status, channel, page]);
+  }, [tenantNameParam, tenantIdParam, statusParam, channelParam, pageParam]);
 
   useEffect(() => {
     fetchNotifications();
-
-    // Sync to URL
-    const params = new URLSearchParams();
-    if (tenantName) params.set('tenantName', tenantName);
-    if (tenantId) params.set('tenantId', tenantId);
-    if (status) params.set('status', status);
-    if (channel) params.set('channel', channel);
-    if (page > 0) params.set('page', String(page));
-    setSearchParams(params, { replace: true });
-  }, [fetchNotifications, tenantName, tenantId, status, channel, page, setSearchParams]);
+  }, [fetchNotifications]);
 
   const getStatusChipClass = (st: NotificationStatus) => {
     switch (st) {
@@ -81,8 +79,9 @@ export default function AdminNotificationsPage() {
         return 'chip-processing';
       case 'RETRYING':
         return 'chip-retrying';
+      case 'SCHEDULED':
+        return 'chip-scheduled';
       case 'DLQ':
-        return 'chip-cancelled';
       case 'CANCELLED':
         return 'chip-cancelled';
       default:
@@ -124,11 +123,8 @@ export default function AdminNotificationsPage() {
           <input
             type="text"
             placeholder="Filter by Tenant Name…"
-            value={tenantName}
-            onChange={(e) => {
-              setTenantName(e.target.value);
-              setPage(0);
-            }}
+            value={tenantNameParam}
+            onChange={(e) => updateParam('tenantName', e.target.value)}
             className="input-text"
             style={{ border: 'none', padding: '6px 0', fontSize: 12, width: '100%' }}
           />
@@ -139,11 +135,8 @@ export default function AdminNotificationsPage() {
           <input
             type="text"
             placeholder="Filter by Tenant UUID…"
-            value={tenantId}
-            onChange={(e) => {
-              setTenantId(e.target.value);
-              setPage(0);
-            }}
+            value={tenantIdParam}
+            onChange={(e) => updateParam('tenantId', e.target.value)}
             className="input-text mono"
             style={{ border: 'none', padding: '6px 0', fontSize: 12, width: '100%' }}
           />
@@ -151,15 +144,13 @@ export default function AdminNotificationsPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value as NotificationStatus | '');
-              setPage(0);
-            }}
+            value={statusParam}
+            onChange={(e) => updateParam('status', e.target.value)}
             className="select-control"
             style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }}
           >
             <option value="">All Statuses</option>
+            <option value="SCHEDULED">Scheduled</option>
             <option value="QUEUED">Queued</option>
             <option value="PROCESSING">Processing</option>
             <option value="RETRYING">Retrying</option>
@@ -170,11 +161,8 @@ export default function AdminNotificationsPage() {
           </select>
 
           <select
-            value={channel}
-            onChange={(e) => {
-              setChannel(e.target.value as any);
-              setPage(0);
-            }}
+            value={channelParam}
+            onChange={(e) => updateParam('channel', e.target.value)}
             className="select-control"
             style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }}
           >
@@ -184,16 +172,10 @@ export default function AdminNotificationsPage() {
             <option value="IN_APP">In-App</option>
           </select>
 
-          {(tenantName || tenantId || status || channel) && (
+          {(tenantNameParam || tenantIdParam || statusParam || channelParam || pageParam > 0) && (
             <button
               type="button"
-              onClick={() => {
-                setTenantName('');
-                setTenantId('');
-                setStatus('');
-                setChannel('');
-                setPage(0);
-              }}
+              onClick={() => setSearchParams(new URLSearchParams())}
               className="btn btn-secondary"
               style={{ fontSize: 11, padding: '4px 8px' }}
             >
@@ -338,13 +320,13 @@ export default function AdminNotificationsPage() {
             }}
           >
             <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-              Page {page + 1} of {totalPages}
+              Page {pageParam + 1} of {totalPages}
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 type="button"
-                disabled={page === 0 || loading}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={pageParam === 0 || loading}
+                onClick={() => updateParam('page', String(Math.max(0, pageParam - 1)))}
                 className="btn btn-secondary"
                 style={{ padding: '4px 8px', fontSize: 11 }}
               >
@@ -352,8 +334,8 @@ export default function AdminNotificationsPage() {
               </button>
               <button
                 type="button"
-                disabled={page >= totalPages - 1 || loading}
-                onClick={() => setPage((p) => p + 1)}
+                disabled={pageParam >= totalPages - 1 || loading}
+                onClick={() => updateParam('page', String(pageParam + 1))}
                 className="btn btn-secondary"
                 style={{ padding: '4px 8px', fontSize: 11 }}
               >

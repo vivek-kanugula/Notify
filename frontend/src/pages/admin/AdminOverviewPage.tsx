@@ -25,8 +25,10 @@ export default function AdminOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchOverview = useCallback(async () => {
-    setLoading(true);
+  const fetchOverview = useCallback(async (isPolling = false) => {
+    if (!isPolling) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const now = new Date();
@@ -39,33 +41,48 @@ export default function AdminOverviewPage() {
       });
       setData(overview);
     } catch (err: any) {
-      setError(err?.message || 'Failed to load platform analytics overview.');
+      if (!isPolling) {
+        setError(err?.message || 'Failed to load platform analytics overview.');
+      }
     } finally {
-      setLoading(false);
+      if (!isPolling) {
+        setLoading(false);
+      }
     }
   }, [timeRange]);
 
   useEffect(() => {
     fetchOverview();
+
+    // Realtime polling every 5 seconds for authoritative pipeline telemetry
+    const interval = setInterval(() => {
+      fetchOverview(true);
+    }, 5000);
+
+    const handleFocus = () => {
+      fetchOverview(true);
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [fetchOverview]);
 
   const handleStageClick = (stage: RailStageName) => {
-    if (stage === 'DLQ') {
-      navigate('/admin/dlq?status=OPEN');
-    } else {
-      navigate(`/admin/notifications?status=${stage}`);
-    }
+    navigate(`/admin/notifications?status=${stage}`);
   };
 
   const aggregateCounts: Record<RailStageName, number> = {
-    SCHEDULED: 0,
-    QUEUED: data?.queueDepth ?? 0,
-    PROCESSING: data?.activeCount ?? 0,
-    RETRYING: 0,
-    DELIVERED: data?.deliveredCount ?? 0,
-    FAILED: data?.failedCount ?? 0,
-    DLQ: data?.dlqOpenCount ?? 0,
-    CANCELLED: data?.cancelledCount ?? 0,
+    SCHEDULED: data?.statusCounts?.SCHEDULED ?? 0,
+    QUEUED: data?.statusCounts?.QUEUED ?? data?.queueDepth ?? 0,
+    PROCESSING: data?.statusCounts?.PROCESSING ?? 0,
+    RETRYING: data?.statusCounts?.RETRYING ?? 0,
+    DELIVERED: data?.statusCounts?.DELIVERED ?? data?.deliveredCount ?? 0,
+    FAILED: data?.statusCounts?.FAILED ?? data?.failedCount ?? 0,
+    DLQ: data?.statusCounts?.DLQ ?? data?.dlqOpenCount ?? 0,
+    CANCELLED: data?.statusCounts?.CANCELLED ?? data?.cancelledCount ?? 0,
   };
 
   return (
@@ -129,7 +146,7 @@ export default function AdminOverviewPage() {
 
           <button
             type="button"
-            onClick={fetchOverview}
+            onClick={() => fetchOverview()}
             disabled={loading}
             className="btn btn-secondary"
             title="Refresh analytics data"

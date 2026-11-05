@@ -32,6 +32,7 @@ export interface AdminAnalyticsOverviewResponse {
   dlqOpenCount: number;
   topTenants: TopTenantVolume[];
   topFailureReasons: TopFailureReason[];
+  statusCounts?: Record<string, number>;
 }
 
 export interface TenantUsageSummaryResponse {
