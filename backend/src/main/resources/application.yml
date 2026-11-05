@@ -76,6 +76,8 @@ notify:
   frontend-url: ${NOTIFY_FRONTEND_URL:http://localhost:5173}
   jwt:
     secret: ${NOTIFY_JWT_SECRET:placeholder_hs256_secret_key_minimum_32_characters_long}
+  auth:
+    require-gmail: ${NOTIFY_AUTH_REQUIRE_GMAIL:true}
   admin:
     default-email: ${NOTIFY_ADMIN_EMAIL:admin@notify.local}
     default-password: ${NOTIFY_ADMIN_PASSWORD:placeholder_admin_password_min_10_chars}

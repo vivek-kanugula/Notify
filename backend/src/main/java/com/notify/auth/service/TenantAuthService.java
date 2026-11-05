@@ -14,6 +14,8 @@ import com.notify.tenant.entity.TenantUserEntity;
 import com.notify.tenant.repository.TenantRepository;
 import com.notify.tenant.repository.TenantUserRepository;
 import com.notify.webhook.service.WebhookEndpointService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,8 @@ import java.util.regex.Pattern;
 public class TenantAuthService {
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("[^a-z0-9-]");
+    public static final Pattern GMAIL_PATTERN =
+            Pattern.compile("^[A-Za-z0-9._%+-]+@gmail\\.com$", Pattern.CASE_INSENSITIVE);
     private static final String DUMMY_BCRYPT_HASH =
             "$2a$12$e8k4Vv5gX9T61p0u3e5sHeO1f0Vq8w3m7yK2r9t4w8x1z5v6p7q8r";
 
@@ -43,6 +47,28 @@ public class TenantAuthService {
     private final RefreshTokenService refreshTokenService;
     private final LoginThrottleService loginThrottleService;
     private final WebhookEndpointService webhookEndpointService;
+    private final boolean requireGmail;
+
+    @Autowired
+    public TenantAuthService(
+            TenantRepository tenantRepository,
+            TenantUserRepository tenantUserRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService,
+            LoginThrottleService loginThrottleService,
+            WebhookEndpointService webhookEndpointService,
+            @Value("${notify.auth.require-gmail:true}") boolean requireGmail
+    ) {
+        this.tenantRepository = tenantRepository;
+        this.tenantUserRepository = tenantUserRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.refreshTokenService = refreshTokenService;
+        this.loginThrottleService = loginThrottleService;
+        this.webhookEndpointService = webhookEndpointService;
+        this.requireGmail = requireGmail;
+    }
 
     public TenantAuthService(
             TenantRepository tenantRepository,
@@ -53,13 +79,12 @@ public class TenantAuthService {
             LoginThrottleService loginThrottleService,
             WebhookEndpointService webhookEndpointService
     ) {
-        this.tenantRepository = tenantRepository;
-        this.tenantUserRepository = tenantUserRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.refreshTokenService = refreshTokenService;
-        this.loginThrottleService = loginThrottleService;
-        this.webhookEndpointService = webhookEndpointService;
+        this(tenantRepository, tenantUserRepository, passwordEncoder, jwtService,
+             refreshTokenService, loginThrottleService, webhookEndpointService, true);
+    }
+
+    public static boolean isGoogleEmail(String email) {
+        return email != null && GMAIL_PATTERN.matcher(email.trim()).matches();
     }
 
     /**
@@ -67,6 +92,12 @@ public class TenantAuthService {
      */
     @Transactional
     public SignupResult signup(SignupRequest request, String userAgent, String ipAddress) {
+        // Enforce Google email domain (@gmail.com) when enabled
+        if (requireGmail && !isGoogleEmail(request.email())) {
+            throw new NotifyException(ErrorCode.VALIDATION_FAILED,
+                    "Email must be a valid Google domain (@gmail.com)");
+        }
+
         // One account per email, across tenants.
         if (tenantUserRepository.findByEmail(request.email().toLowerCase(Locale.ROOT)).isPresent()) {
             throw new NotifyException(ErrorCode.EMAIL_ALREADY_REGISTERED,
@@ -123,6 +154,12 @@ public class TenantAuthService {
      */
     @Transactional
     public LoginResult login(LoginRequest request, String userAgent, String ipAddress) {
+        // Enforce Google email domain (@gmail.com) when enabled
+        if (requireGmail && !isGoogleEmail(request.email())) {
+            throw new NotifyException(ErrorCode.VALIDATION_FAILED,
+                    "Email must be a valid Google domain (@gmail.com)");
+        }
+
         // Check throttle
         if (loginThrottleService.isThrottled(request.email(), ipAddress)) {
             throw new NotifyException(ErrorCode.RATE_LIMITED, "Too many login attempts. Please try again later.");

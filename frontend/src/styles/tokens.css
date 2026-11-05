@@ -954,6 +954,46 @@ input[type="radio"] {
   color: var(--color-signal-hover);
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 38px !important;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--color-ink-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-control);
+  line-height: 1;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.password-toggle-btn:hover {
+  color: var(--color-harbor);
+  background-color: var(--color-surface-hover);
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 1px;
+}
+
 /* ==========================================================================
    Landing Page (Persuade Mode)
    ========================================================================== */

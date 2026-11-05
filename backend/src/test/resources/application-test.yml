@@ -31,6 +31,8 @@ notify:
     default-password: placeholder_admin_password_min_10_chars
   jwt:
     secret: test_jwt_secret_key_must_be_at_least_32_characters_long_for_hs256
+  auth:
+    require-gmail: false
 
 # Disable Redis auto-config and Quartz auto-startup in tests
 spring:
