@@ -5,6 +5,7 @@ import type { NotificationStatus, NotificationHistoryEntry } from './notificatio
 export interface AdminNotificationListItem {
   id: string;
   tenantId: string;
+  tenantName?: string | null;
   channel: 'EMAIL' | 'WEBHOOK' | 'IN_APP';
   status: NotificationStatus;
   recipient: string;
@@ -44,6 +45,7 @@ export interface AdminNotificationDetail {
 
 export interface AdminNotificationSearchParams {
   tenantId?: string;
+  tenantName?: string;
   status?: NotificationStatus | '';
   channel?: 'EMAIL' | 'WEBHOOK' | 'IN_APP' | '';
   from?: string;
@@ -57,6 +59,7 @@ export async function searchAdminNotifications(
 ): Promise<PageResponse<AdminNotificationListItem>> {
   const searchParams = new URLSearchParams();
   if (params.tenantId?.trim()) searchParams.set('tenantId', params.tenantId.trim());
+  if (params.tenantName?.trim()) searchParams.set('tenantName', params.tenantName.trim());
   if (params.status) searchParams.set('status', params.status);
   if (params.channel) searchParams.set('channel', params.channel);
   if (params.from) searchParams.set('from', params.from);

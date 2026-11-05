@@ -18,6 +18,7 @@ public record DlqEntrySummary(
         UUID notificationId,
         UUID tenantId,
         String tenantSlug,
+        String tenantName,
         Channel channel,
         DlqReason reason,
         String lastErrorCode,
@@ -27,4 +28,11 @@ public record DlqEntrySummary(
         Instant createdAt,
         Instant updatedAt
 ) {
+    public DlqEntrySummary(
+            UUID entryId, UUID notificationId, UUID tenantId, String tenantSlug,
+            Channel channel, DlqReason reason, String lastErrorCode, int attemptCount,
+            DlqStatus status, int replayCount, Instant createdAt, Instant updatedAt
+    ) {
+        this(entryId, notificationId, tenantId, tenantSlug, null, channel, reason, lastErrorCode, attemptCount, status, replayCount, createdAt, updatedAt);
+    }
 }

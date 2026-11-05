@@ -22,11 +22,13 @@ export default function AdminNotificationsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Read filters from URL search params
+  const initialTenantName = searchParams.get('tenantName') || '';
   const initialTenantId = searchParams.get('tenantId') || '';
   const initialStatus = (searchParams.get('status') as NotificationStatus) || '';
   const initialChannel = (searchParams.get('channel') as 'EMAIL' | 'WEBHOOK' | 'IN_APP') || '';
   const initialPage = parseInt(searchParams.get('page') || '0', 10);
 
+  const [tenantName, setTenantName] = useState(initialTenantName);
   const [tenantId, setTenantId] = useState(initialTenantId);
   const [status, setStatus] = useState<NotificationStatus | ''>(initialStatus);
   const [channel, setChannel] = useState<'EMAIL' | 'WEBHOOK' | 'IN_APP' | ''>(initialChannel);
@@ -39,6 +41,7 @@ export default function AdminNotificationsPage() {
     setError(null);
     try {
       const data = await searchAdminNotifications({
+        tenantName: tenantName.trim() || undefined,
         tenantId: tenantId.trim() || undefined,
         status: status || undefined,
         channel: channel || undefined,
@@ -53,19 +56,20 @@ export default function AdminNotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, status, channel, page]);
+  }, [tenantName, tenantId, status, channel, page]);
 
   useEffect(() => {
     fetchNotifications();
 
     // Sync to URL
     const params = new URLSearchParams();
+    if (tenantName) params.set('tenantName', tenantName);
     if (tenantId) params.set('tenantId', tenantId);
     if (status) params.set('status', status);
     if (channel) params.set('channel', channel);
     if (page > 0) params.set('page', String(page));
     setSearchParams(params, { replace: true });
-  }, [fetchNotifications, tenantId, status, channel, page, setSearchParams]);
+  }, [fetchNotifications, tenantName, tenantId, status, channel, page, setSearchParams]);
 
   const getStatusChipClass = (st: NotificationStatus) => {
     switch (st) {
@@ -115,7 +119,22 @@ export default function AdminNotificationsPage() {
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ color: 'var(--color-ink-2)' }} />
+          <input
+            type="text"
+            placeholder="Filter by Tenant Name…"
+            value={tenantName}
+            onChange={(e) => {
+              setTenantName(e.target.value);
+              setPage(0);
+            }}
+            className="input-text"
+            style={{ border: 'none', padding: '6px 0', fontSize: 12, width: '100%' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
           <Search size={14} style={{ color: 'var(--color-ink-2)' }} />
           <input
             type="text"
@@ -126,7 +145,7 @@ export default function AdminNotificationsPage() {
               setPage(0);
             }}
             className="input-text mono"
-            style={{ border: 'none', padding: '6px 0', fontSize: 12 }}
+            style={{ border: 'none', padding: '6px 0', fontSize: 12, width: '100%' }}
           />
         </div>
 
@@ -165,10 +184,11 @@ export default function AdminNotificationsPage() {
             <option value="IN_APP">In-App</option>
           </select>
 
-          {(tenantId || status || channel) && (
+          {(tenantName || tenantId || status || channel) && (
             <button
               type="button"
               onClick={() => {
+                setTenantName('');
                 setTenantId('');
                 setStatus('');
                 setChannel('');
@@ -224,7 +244,7 @@ export default function AdminNotificationsPage() {
               <thead>
                 <tr style={{ background: 'var(--color-chalk)', borderBottom: '1px solid var(--color-rail)', color: 'var(--color-ink-2)' }}>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Notification ID</th>
-                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tenant ID</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 600 }}>Tenant</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Channel</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Status</th>
                   <th style={{ padding: '10px 14px', fontWeight: 600 }}>Recipient</th>
@@ -252,15 +272,20 @@ export default function AdminNotificationsPage() {
                     <td style={{ padding: '10px 14px' }}>
                       <Link
                         to={`/admin/tenants/${n.tenantId}`}
-                        className="mono"
                         style={{
-                          fontSize: 11,
-                          color: 'var(--color-ink-2)',
                           textDecoration: 'none',
+                          display: 'inline-block',
                         }}
-                        title={n.tenantId}
+                        title={`Tenant: ${n.tenantName || 'Unknown'} (ID: ${n.tenantId})`}
                       >
-                        {n.tenantId.slice(0, 8)}…
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-signal)', display: 'block' }}>
+                          {n.tenantName || `${n.tenantId.slice(0, 8)}…`}
+                        </span>
+                        {n.tenantName && (
+                          <span className="mono" style={{ fontSize: 10, color: 'var(--color-ink-2)', display: 'block' }}>
+                            {n.tenantId.slice(0, 8)}…
+                          </span>
+                        )}
                       </Link>
                     </td>
                     <td style={{ padding: '10px 14px' }}>

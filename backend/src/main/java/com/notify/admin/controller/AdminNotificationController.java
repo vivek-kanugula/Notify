@@ -47,6 +47,7 @@ public class AdminNotificationController {
     @GetMapping
     public ResponseEntity<Page<AdminNotificationListItemResponse>> search(
             @RequestParam(value = "tenantId", required = false) UUID tenantId,
+            @RequestParam(value = "tenantName", required = false) String tenantName,
             @RequestParam(value = "status", required = false) NotificationStatus status,
             @RequestParam(value = "channel", required = false) Channel channel,
             @RequestParam(value = "from", required = false) String from,
@@ -66,9 +67,9 @@ public class AdminNotificationController {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<AdminNotificationListItemResponse> result = notificationQueryService
-                .adminSearch(tenantId, channel, status, fromInstant, toInstant, pageable)
+                .adminSearch(tenantId, tenantName, channel, status, fromInstant, toInstant, pageable)
                 .map(v -> new AdminNotificationListItemResponse(
-                        v.id(), v.tenantId(), v.channel(), v.status(), v.recipient(), v.subject(), v.createdAt()));
+                        v.id(), v.tenantId(), v.tenantName(), v.channel(), v.status(), v.recipient(), v.subject(), v.createdAt()));
         return ResponseEntity.ok(result);
     }
 

@@ -19,11 +19,26 @@ import java.util.UUID;
  */
 public interface DeadLetterEntrySearch {
 
+    default List<DeadLetterEntryEntity> searchEntries(
+            DlqStatus status,
+            Channel channel,
+            DlqReason reason,
+            UUID tenantId,
+            Instant from,
+            Instant to,
+            Instant cursorAt,
+            UUID cursorId,
+            int limit
+    ) {
+        return searchEntries(status, channel, reason, tenantId, null, from, to, cursorAt, cursorId, limit);
+    }
+
     List<DeadLetterEntryEntity> searchEntries(
             DlqStatus status,
             Channel channel,
             DlqReason reason,
             UUID tenantId,
+            String tenantName,
             Instant from,
             Instant to,
             Instant cursorAt,

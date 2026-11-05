@@ -4,11 +4,13 @@ import com.notify.common.model.Channel;
 import com.notify.common.model.DlqReason;
 import com.notify.common.model.DlqStatus;
 import com.notify.dlq.entity.DeadLetterEntryEntity;
+import com.notify.tenant.entity.TenantEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,7 +28,7 @@ public class DeadLetterEntrySearchImpl implements DeadLetterEntrySearch {
 
     @Override
     public List<DeadLetterEntryEntity> searchEntries(
-            DlqStatus status, Channel channel, DlqReason reason, UUID tenantId,
+            DlqStatus status, Channel channel, DlqReason reason, UUID tenantId, String tenantName,
             Instant from, Instant to, Instant cursorAt, UUID cursorId, int limit
     ) {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
@@ -45,6 +47,17 @@ public class DeadLetterEntrySearchImpl implements DeadLetterEntrySearch {
         }
         if (tenantId != null) {
             predicates.add(builder.equal(entry.get("tenantId"), tenantId));
+        }
+        if (tenantName != null && !tenantName.isBlank()) {
+            Subquery<UUID> subquery = query.subquery(UUID.class);
+            Root<TenantEntity> tenantRoot = subquery.from(TenantEntity.class);
+            String pattern = "%" + tenantName.trim().toLowerCase() + "%";
+            subquery.select(tenantRoot.get("id"))
+                    .where(builder.or(
+                            builder.like(builder.lower(tenantRoot.get("name")), pattern),
+                            builder.like(builder.lower(tenantRoot.get("slug")), pattern)
+                    ));
+            predicates.add(entry.get("tenantId").in(subquery));
         }
         if (from != null) {
             predicates.add(builder.greaterThanOrEqualTo(entry.get("createdAt"), from));

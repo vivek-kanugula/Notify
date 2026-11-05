@@ -193,6 +193,21 @@ describe('adminDlq.ts API request serialization & contract enforcement', () => {
     assert.strictEqual(res.hasMore, true);
   });
 
+  test('listAdminDlqEntries serializes tenantId and tenantName parameters', async () => {
+    await listAdminDlqEntries({
+      tenantId: '00000000-0000-0000-0000-000000000003',
+      tenantName: 'Acme Corp',
+      status: 'OPEN',
+    });
+
+    assert.ok(lastRequest);
+    const parsedUrl = new URL(lastRequest.url, 'http://localhost');
+    assert.strictEqual(parsedUrl.pathname, '/api/v1/admin/dlq');
+    assert.strictEqual(parsedUrl.searchParams.get('tenantId'), '00000000-0000-0000-0000-000000000003');
+    assert.strictEqual(parsedUrl.searchParams.get('tenantName'), 'Acme Corp');
+    assert.strictEqual(parsedUrl.searchParams.get('status'), 'OPEN');
+  });
+
   test('getAdminDlqEntryDetail returns attempts, history, truncation flags, and enforces zero recipient leak ', async () => {
     const detail = await getAdminDlqEntryDetail('00000000-0000-0000-0000-000000000001');
 

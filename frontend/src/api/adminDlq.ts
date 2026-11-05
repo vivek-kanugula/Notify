@@ -15,6 +15,7 @@ export interface DlqEntrySummary {
   notificationId: string;
   tenantId: string;
   tenantSlug: string;
+  tenantName?: string | null;
   channel: Channel;
   reason: DlqReason;
   lastErrorCode: string | null;
@@ -84,6 +85,7 @@ export async function listAdminDlqEntries(params?: {
   channel?: string;
   reason?: string;
   tenantId?: string;
+  tenantName?: string;
   from?: string;
   to?: string;
   cursor?: string;
@@ -94,6 +96,7 @@ export async function listAdminDlqEntries(params?: {
   if (params?.channel) query.set('channel', params.channel);
   if (params?.reason) query.set('reason', params.reason);
   if (params?.tenantId) query.set('tenantId', params.tenantId);
+  if (params?.tenantName) query.set('tenantName', params.tenantName);
   if (params?.from) query.set('from', params.from);
   if (params?.to) query.set('to', params.to);
   if (params?.cursor) query.set('cursor', params.cursor);

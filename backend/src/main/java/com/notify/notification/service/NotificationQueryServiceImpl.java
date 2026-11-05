@@ -5,7 +5,12 @@ import com.notify.common.model.NotificationStatus;
 import com.notify.notification.entity.NotificationEntity;
 import com.notify.notification.repository.NotificationRepository;
 import com.notify.notification.repository.NotificationStatusHistoryRepository;
+import com.notify.tenant.entity.TenantEntity;
+import com.notify.tenant.repository.TenantRepository;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,9 +24,12 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Default {@link NotificationQueryService}: the only class that touches {@link NotificationRepository} for
@@ -32,11 +40,20 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationStatusHistoryRepository statusHistoryRepository;
+    private final TenantRepository tenantRepository;
+
+    @Autowired
+    public NotificationQueryServiceImpl(NotificationRepository notificationRepository,
+                                        NotificationStatusHistoryRepository statusHistoryRepository,
+                                        @Autowired(required = false) TenantRepository tenantRepository) {
+        this.notificationRepository = notificationRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.tenantRepository = tenantRepository;
+    }
 
     public NotificationQueryServiceImpl(NotificationRepository notificationRepository,
                                         NotificationStatusHistoryRepository statusHistoryRepository) {
-        this.notificationRepository = notificationRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
+        this(notificationRepository, statusHistoryRepository, null);
     }
 
     @Override
@@ -125,12 +142,23 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<NotificationView> adminSearch(UUID tenantId, Channel channel, NotificationStatus status,
+    public Page<NotificationView> adminSearch(UUID tenantId, String tenantName, Channel channel, NotificationStatus status,
                                               Instant from, Instant to, Pageable pageable) {
         Specification<NotificationEntity> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (tenantId != null) {
                 predicates.add(cb.equal(root.get("tenantId"), tenantId));
+            }
+            if (tenantName != null && !tenantName.isBlank()) {
+                Subquery<UUID> subquery = query.subquery(UUID.class);
+                Root<TenantEntity> tenantRoot = subquery.from(TenantEntity.class);
+                String pattern = "%" + tenantName.trim().toLowerCase() + "%";
+                subquery.select(tenantRoot.get("id"))
+                        .where(cb.or(
+                                cb.like(cb.lower(tenantRoot.get("name")), pattern),
+                                cb.like(cb.lower(tenantRoot.get("slug")), pattern)
+                        ));
+                predicates.add(root.get("tenantId").in(subquery));
             }
             if (channel != null) {
                 predicates.add(cb.equal(root.get("channel"), channel));
@@ -146,7 +174,19 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return notificationRepository.findAll(spec, pageable).map(this::toView);
+
+        Page<NotificationEntity> entities = notificationRepository.findAll(spec, pageable);
+        List<UUID> tenantIds = entities.getContent().stream()
+                .map(NotificationEntity::getTenantId)
+                .distinct()
+                .toList();
+
+        Map<UUID, String> tenantNames = (tenantRepository != null && !tenantIds.isEmpty())
+                ? tenantRepository.findAllById(tenantIds).stream()
+                        .collect(Collectors.toMap(TenantEntity::getId, TenantEntity::getName, (a, b) -> a))
+                : Collections.emptyMap();
+
+        return entities.map(n -> toView(n, tenantNames.get(n.getTenantId())));
     }
 
     @Override
@@ -178,8 +218,15 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
     }
 
     private NotificationView toView(NotificationEntity n) {
+        String tenantName = (tenantRepository != null && n.getTenantId() != null)
+                ? tenantRepository.findById(n.getTenantId()).map(TenantEntity::getName).orElse(null)
+                : null;
+        return toView(n, tenantName);
+    }
+
+    private NotificationView toView(NotificationEntity n, String tenantName) {
         return new NotificationView(
-                n.getId(), n.getTenantId(), n.getChannel(), n.getStatus(),
+                n.getId(), n.getTenantId(), tenantName, n.getChannel(), n.getStatus(),
                 n.getRecipient(), n.getSubject(), n.getScheduledAt(), n.getCreatedAt(),
                 n.getFirstProcessingAt(), n.getCompletedAt(), n.getAttemptCount(),
                 n.getLastErrorCode(), n.getProvider(), n.getProviderMessageId(), n.getMetadata());

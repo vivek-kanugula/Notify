@@ -97,9 +97,17 @@ public class AdminDlqService {
             DlqStatus status, Channel channel, DlqReason reason, UUID tenantId,
             Instant from, Instant to, DlqCursor cursor, int limit
     ) {
+        return list(status, channel, reason, tenantId, null, from, to, cursor, limit);
+    }
+
+    @Transactional(readOnly = true)
+    public DlqPage<DlqEntrySummary> list(
+            DlqStatus status, Channel channel, DlqReason reason, UUID tenantId, String tenantName,
+            Instant from, Instant to, DlqCursor cursor, int limit
+    ) {
         int effective = boundedLimit(limit);
         List<DeadLetterEntryEntity> rows = entries.searchEntries(
-                status, channel, reason, tenantId, from, to,
+                status, channel, reason, tenantId, tenantName, from, to,
                 cursor == null ? null : cursor.createdAt(), cursor == null ? null : cursor.id(),
                 effective + 1);
         boolean more = rows.size() > effective;
@@ -281,9 +289,14 @@ public class AdminDlqService {
         return tenants.findById(tenantId).map(TenantEntity::getSlug).orElse(null);
     }
 
+    private String tenantName(UUID tenantId) {
+        return tenants.findById(tenantId).map(TenantEntity::getName).orElse(null);
+    }
+
     private DlqEntrySummary toSummary(DeadLetterEntryEntity entry) {
         return new DlqEntrySummary(
                 entry.getId(), entry.getNotificationId(), entry.getTenantId(), tenantSlug(entry.getTenantId()),
+                tenantName(entry.getTenantId()),
                 entry.getChannel(), entry.getReason(), entry.getLastErrorCode(), entry.getAttemptCount(),
                 entry.getStatus(), entry.getReplayCount(), entry.getCreatedAt(), entry.getUpdatedAt());
     }

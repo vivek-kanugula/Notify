@@ -8,6 +8,7 @@ import {
   Bell,
   Search,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import {
   listAdminDlqEntries,
@@ -26,6 +27,7 @@ export default function AdminDlqPage() {
   const channelParam = searchParams.get('channel') || 'ALL';
   const reasonParam = searchParams.get('reason') || 'ALL';
   const tenantIdParam = searchParams.get('tenantId') || '';
+  const tenantNameParam = searchParams.get('tenantName') || '';
   const cursorParam = searchParams.get('cursor') || '';
 
   const [entries, setEntries] = useState<DlqEntrySummary[]>([]);
@@ -43,6 +45,7 @@ export default function AdminDlqPage() {
         channel: channelParam === 'ALL' ? undefined : channelParam,
         reason: reasonParam === 'ALL' ? undefined : reasonParam,
         tenantId: tenantIdParam.trim() ? tenantIdParam.trim() : undefined,
+        tenantName: tenantNameParam.trim() ? tenantNameParam.trim() : undefined,
         cursor: cursorParam || undefined,
         limit: 25,
       });
@@ -54,7 +57,7 @@ export default function AdminDlqPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusParam, channelParam, reasonParam, tenantIdParam, cursorParam]);
+  }, [statusParam, channelParam, reasonParam, tenantIdParam, tenantNameParam, cursorParam]);
 
   useEffect(() => {
     fetchEntries();
@@ -264,8 +267,38 @@ export default function AdminDlqPage() {
           </select>
         </div>
 
-        {/* Tenant Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+        {/* Tenant Name Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 170 }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <Search
+              size={13}
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-ink-2)',
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Filter by Tenant Name…"
+              value={tenantNameParam}
+              onChange={(e) => updateParam('tenantName', e.target.value)}
+              className="input-text"
+              style={{
+                paddingLeft: 28,
+                paddingRight: 10,
+                paddingTop: 5,
+                paddingBottom: 5,
+                fontSize: 12,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Tenant UUID Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 170 }}>
           <div style={{ position: 'relative', width: '100%' }}>
             <Search
               size={13}
@@ -293,6 +326,20 @@ export default function AdminDlqPage() {
             />
           </div>
         </div>
+
+        {(statusParam !== 'ALL' || channelParam !== 'ALL' || reasonParam !== 'ALL' || tenantIdParam || tenantNameParam) && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams();
+              setSearchParams(next);
+            }}
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '4px 8px' }}
+          >
+            <RotateCcw size={11} /> Reset
+          </button>
+        )}
       </div>
 
       {error && (
@@ -368,11 +415,17 @@ export default function AdminDlqPage() {
                     <td style={{ padding: '10px 14px' }}>
                       <Link
                         to={`/admin/tenants/${entry.tenantId}`}
-                        style={{ textDecoration: 'none' }}
+                        style={{ textDecoration: 'none', display: 'inline-block' }}
+                        title={`Tenant: ${entry.tenantName || entry.tenantSlug} (ID: ${entry.tenantId})`}
                       >
-                        <span className="mono" style={{ fontSize: 11, color: 'var(--color-signal)', fontWeight: 600 }}>
-                          {entry.tenantSlug}
+                        <span style={{ fontSize: 11, color: 'var(--color-signal)', fontWeight: 600, display: 'block' }}>
+                          {entry.tenantName || entry.tenantSlug}
                         </span>
+                        {entry.tenantName && (
+                          <span className="mono" style={{ fontSize: 10, color: 'var(--color-ink-2)', display: 'block' }}>
+                            {entry.tenantSlug}
+                          </span>
+                        )}
                       </Link>
                     </td>
                     <td style={{ padding: '10px 14px' }}>

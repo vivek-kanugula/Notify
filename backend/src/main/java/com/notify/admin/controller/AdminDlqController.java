@@ -59,6 +59,7 @@ public class AdminDlqController {
             @RequestParam(value = "channel", required = false) String channel,
             @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "tenantId", required = false) UUID tenantId,
+            @RequestParam(value = "tenantName", required = false) String tenantName,
             @RequestParam(value = "from", required = false) String from,
             @RequestParam(value = "to", required = false) String to,
             @RequestParam(value = "cursor", required = false) String cursor,
@@ -74,7 +75,7 @@ public class AdminDlqController {
                 AdminDlqRequests.enumValue(status, DlqStatus.class, "status"),
                 AdminDlqRequests.enumValue(channel, Channel.class, "channel"),
                 AdminDlqRequests.enumValue(reason, DlqReason.class, "reason"),
-                tenantId, fromInstant, toInstant, DlqCursor.decode(cursor), limit));
+                tenantId, tenantName, fromInstant, toInstant, DlqCursor.decode(cursor), limit));
     }
 
     @GetMapping("/{entryId}")

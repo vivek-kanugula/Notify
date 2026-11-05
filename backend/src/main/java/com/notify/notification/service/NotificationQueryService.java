@@ -42,7 +42,12 @@ public interface NotificationQueryService {
     /** Global count of notifications in one status (/ metrics gauges). */
     long countByStatusGlobal(NotificationStatus status);
 
-    Page<NotificationView> adminSearch(UUID tenantId, Channel channel, NotificationStatus status,
+    default Page<NotificationView> adminSearch(UUID tenantId, Channel channel, NotificationStatus status,
+                                               Instant from, Instant to, Pageable pageable) {
+        return adminSearch(tenantId, null, channel, status, from, to, pageable);
+    }
+
+    Page<NotificationView> adminSearch(UUID tenantId, String tenantName, Channel channel, NotificationStatus status,
                                        Instant from, Instant to, Pageable pageable);
 
     Optional<NotificationView> findForAdmin(UUID id);
@@ -77,6 +82,7 @@ public interface NotificationQueryService {
     record NotificationView(
             UUID id,
             UUID tenantId,
+            String tenantName,
             Channel channel,
             NotificationStatus status,
             String recipient,
@@ -90,5 +96,14 @@ public interface NotificationQueryService {
             String provider,
             String providerMessageId,
             String metadata
-    ) {}
+    ) {
+        public NotificationView(
+                UUID id, UUID tenantId, Channel channel, NotificationStatus status,
+                String recipient, String subject, Instant scheduledAt, Instant createdAt,
+                Instant firstProcessingAt, Instant completedAt, int attemptCount,
+                String lastErrorCode, String provider, String providerMessageId, String metadata) {
+            this(id, tenantId, null, channel, status, recipient, subject, scheduledAt, createdAt,
+                    firstProcessingAt, completedAt, attemptCount, lastErrorCode, provider, providerMessageId, metadata);
+        }
+    }
 }

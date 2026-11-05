@@ -10,9 +10,15 @@ import java.util.UUID;
 public record AdminNotificationListItemResponse(
         UUID id,
         UUID tenantId,
+        String tenantName,
         Channel channel,
         NotificationStatus status,
         String recipient,
         String subject,
         Instant createdAt
-) {}
+) {
+    public AdminNotificationListItemResponse(UUID id, UUID tenantId, Channel channel, NotificationStatus status,
+                                             String recipient, String subject, Instant createdAt) {
+        this(id, tenantId, null, channel, status, recipient, subject, createdAt);
+    }
+}

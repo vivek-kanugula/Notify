@@ -95,6 +95,7 @@ describe('adminNotifications.ts search and cross-tenant detail', () => {
   test('searchAdminNotifications serializes tenantId, channel, status, and range', async () => {
     await searchAdminNotifications({
       tenantId: '33333333-3333-3333-3333-333333333333',
+      tenantName: 'Acme Corp',
       channel: 'WEBHOOK',
       status: 'FAILED',
       from: '2026-10-01T00:00:00Z',
@@ -106,12 +107,26 @@ describe('adminNotifications.ts search and cross-tenant detail', () => {
     assert.ok(lastRequest);
     const parsedUrl = new URL(lastRequest.url, 'http://localhost');
     assert.strictEqual(parsedUrl.searchParams.get('tenantId'), '33333333-3333-3333-3333-333333333333');
+    assert.strictEqual(parsedUrl.searchParams.get('tenantName'), 'Acme Corp');
     assert.strictEqual(parsedUrl.searchParams.get('channel'), 'WEBHOOK');
     assert.strictEqual(parsedUrl.searchParams.get('status'), 'FAILED');
     assert.strictEqual(parsedUrl.searchParams.get('from'), '2026-10-01T00:00:00Z');
     assert.strictEqual(parsedUrl.searchParams.get('to'), '2026-10-27T00:00:00Z');
     assert.strictEqual(parsedUrl.searchParams.get('page'), '1');
     assert.strictEqual(parsedUrl.searchParams.get('size'), '50');
+  });
+
+  test('searchAdminNotifications serializes tenantName filter independently', async () => {
+    await searchAdminNotifications({
+      tenantName: 'Globex Inc',
+      status: 'DELIVERED',
+    });
+
+    assert.ok(lastRequest);
+    const parsedUrl = new URL(lastRequest.url, 'http://localhost');
+    assert.strictEqual(parsedUrl.searchParams.get('tenantName'), 'Globex Inc');
+    assert.strictEqual(parsedUrl.searchParams.get('status'), 'DELIVERED');
+    assert.strictEqual(parsedUrl.searchParams.get('tenantId'), null);
   });
 
   test('getAdminNotificationDetail returns timeline and attempts without raw body', async () => {
