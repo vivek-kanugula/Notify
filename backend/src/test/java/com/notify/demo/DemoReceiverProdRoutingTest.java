@@ -39,7 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "notify.email.provider=resend",
         "notify.resend.api-key=placeholder-not-used-in-this-test",
         "notify.worker.email.enabled=false",
-        "notify.worker.webhook.enabled=false"
+        "notify.worker.webhook.enabled=false",
+        "notify.worker.inapp.enabled=false"
 })
 class DemoReceiverProdRoutingTest extends AbstractPostgresIntegrationTest {
 

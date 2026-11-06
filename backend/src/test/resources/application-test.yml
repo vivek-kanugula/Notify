@@ -22,6 +22,8 @@ notify:
       enabled: false
     webhook:
       enabled: false
+    inapp:
+      enabled: false
   webhook:
     # Fixed non-production AES-256 key (base64 of 32 bytes) so webhook tests are deterministic and need no secret
     # from the developer. It protects nothing real: every test database is disposable.
