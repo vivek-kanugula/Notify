@@ -18,6 +18,7 @@ export interface UsageSummary {
   totalProcessing: number;
   deliverySuccessRate: number;
   byChannel: Record<Channel, ChannelCounts>;
+  statusCounts?: Record<string, number>;
 }
 
 export interface UsageBucket {

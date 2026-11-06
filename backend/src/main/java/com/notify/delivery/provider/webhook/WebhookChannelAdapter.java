@@ -129,11 +129,15 @@ public class WebhookChannelAdapter implements DeliveryChannelAdapter {
                     "Tenant webhook endpoint is disabled", null, null);
         }
 
+        String targetUrl = (claim.recipient() != null && (claim.recipient().startsWith("http://") || claim.recipient().startsWith("https://")))
+                ? claim.recipient().trim()
+                : destination.url();
+
         DestinationResolver.PinnedDestination pinned;
         try {
-// Resolution spends the same budget as the rest of the attempt: it gets the configured DNS ceiling or
+            // Resolution spends the same budget as the rest of the attempt: it gets the configured DNS ceiling or
             // whatever is left, whichever is smaller (F7).
-            pinned = destinationResolver.resolve(destination.url(), destination.demo(),
+            pinned = destinationResolver.resolve(targetUrl, destination.demo(),
                     deadline.phaseTimeoutMs(properties.dnsTimeout().toMillis()));
         } catch (DestinationRejectedException e) {
             return rejected(e, claim);

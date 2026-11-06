@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch } from './client.ts';
 
 export interface WebhookEndpoint {
   id: string;
@@ -67,4 +67,14 @@ export async function rotateWebhookSecret(): Promise<WebhookEndpoint> {
     throw new Error(error.detail || error.errorCode || 'Failed to rotate webhook secret');
   }
   return res.json();
+}
+
+export async function deleteWebhookEndpoint(): Promise<void> {
+  const res = await apiFetch('/api/v1/webhook-endpoint', {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 204) {
+    const error = await res.json().catch(() => ({ detail: 'Failed to delete webhook endpoint' }));
+    throw new Error(error.detail || error.errorCode || 'Failed to delete webhook endpoint');
+  }
 }

@@ -29,6 +29,13 @@ public interface WebhookEndpointService {
     String rotateSecret(UUID tenantId);
 
     /**
+     * Permanently deletes the tenant's webhook endpoint from the database.
+     *
+     * @throws com.notify.common.error.NotifyException with NOT_FOUND when the tenant has no webhook endpoint configured
+     */
+    void delete(UUID tenantId);
+
+    /**
      * Destination for one delivery attempt, with the decrypted signing secret (the current row, not a
      * snapshot). Empty when the tenant has no endpoint.
      *

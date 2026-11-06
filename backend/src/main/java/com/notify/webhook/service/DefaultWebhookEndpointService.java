@@ -141,6 +141,18 @@ public class DefaultWebhookEndpointService implements WebhookEndpointService {
     }
 
     @Override
+    @Transactional
+    public void delete(UUID tenantId) {
+        WebhookEndpointEntity entity = repository.findByTenantId(tenantId)
+                .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND, "No webhook endpoint is configured"));
+        int deleted = repository.deleteByTenantIdScoped(tenantId);
+        if (deleted != 1) {
+            throw new NotifyException(ErrorCode.NOT_FOUND, "No webhook endpoint is configured");
+        }
+        log.info("Webhook endpoint deleted permanently (tenantId={}, endpointId={})", tenantId, entity.getId());
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<WebhookDestination> resolveDestination(UUID tenantId) {
         return repository.findByTenantId(tenantId).map(entity -> toDestination(tenantId, entity));

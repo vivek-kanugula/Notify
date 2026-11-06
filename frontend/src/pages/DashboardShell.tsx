@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { NavLink, Routes, Route, Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getUsageSummary, getUsageTimeseries, type UsageSummary, type UsageTimeseries } from '../api/usage';
 import { listNotifications, type NotificationSummary } from '../api/notifications';
@@ -31,9 +31,11 @@ import {
   Settings,
   ShieldCheck,
   Zap,
+  Activity,
 } from 'lucide-react';
 
 function OverviewContent() {
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [timeseries, setTimeseries] = useState<UsageTimeseries | null>(null);
@@ -41,48 +43,71 @@ function OverviewContent() {
   const [loading, setLoading] = useState(true);
   const [copiedCurl, setCopiedCurl] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    async function loadData() {
-      setLoading(true);
-      try {
-        const now = new Date();
-        const fromDate = new Date();
-        if (timeRange === '24h') {
-          fromDate.setHours(fromDate.getHours() - 24);
-        } else if (timeRange === '7d') {
-          fromDate.setDate(fromDate.getDate() - 7);
-        } else {
-          fromDate.setDate(fromDate.getDate() - 30);
-        }
-
-        const [sum, ts, notifs] = await Promise.all([
-          getUsageSummary({
-            from: fromDate.toISOString(),
-            to: now.toISOString(),
-          }).catch(() => null),
-          getUsageTimeseries({
-            from: fromDate.toISOString(),
-            to: now.toISOString(),
-            interval: timeRange === '24h' ? 'hour' : 'day',
-          }).catch(() => null),
-          listNotifications({ size: 10 }).catch(() => ({ content: [] as NotificationSummary[] })),
-        ]);
-
-        if (mounted) {
-          setSummary(sum);
-          setTimeseries(ts);
-          setRecentNotifications(notifs.content || []);
-        }
-      } finally {
-        if (mounted) setLoading(false);
+  const loadData = useCallback(async (isPolling = false) => {
+    if (!isPolling) setLoading(true);
+    try {
+      const now = new Date();
+      const fromDate = new Date();
+      if (timeRange === '24h') {
+        fromDate.setHours(fromDate.getHours() - 24);
+      } else if (timeRange === '7d') {
+        fromDate.setDate(fromDate.getDate() - 7);
+      } else {
+        fromDate.setDate(fromDate.getDate() - 30);
       }
+
+      const [sum, ts, notifs] = await Promise.all([
+        getUsageSummary({
+          from: fromDate.toISOString(),
+          to: now.toISOString(),
+        }).catch(() => null),
+        getUsageTimeseries({
+          from: fromDate.toISOString(),
+          to: now.toISOString(),
+          interval: timeRange === '24h' ? 'hour' : 'day',
+        }).catch(() => null),
+        listNotifications({ size: 10 }).catch(() => ({ content: [] as NotificationSummary[] })),
+      ]);
+
+      setSummary(sum);
+      setTimeseries(ts);
+      setRecentNotifications(notifs.content || []);
+    } finally {
+      if (!isPolling) setLoading(false);
     }
-    loadData();
-    return () => {
-      mounted = false;
-    };
   }, [timeRange]);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 5000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [loadData]);
+
+  const aggregateCounts = useMemo(() => {
+    return {
+      SCHEDULED: summary?.statusCounts?.['SCHEDULED'] ?? 0,
+      QUEUED: summary?.statusCounts?.['QUEUED'] ?? 0,
+      PROCESSING: summary?.statusCounts?.['PROCESSING'] ?? (summary?.totalProcessing ?? 0),
+      RETRYING: summary?.statusCounts?.['RETRYING'] ?? 0,
+      DELIVERED: summary?.statusCounts?.['DELIVERED'] ?? (summary?.totalDelivered ?? 0),
+      FAILED: summary?.statusCounts?.['FAILED'] ?? (summary?.totalFailed ?? 0),
+      DLQ: summary?.statusCounts?.['DLQ'] ?? 0,
+      CANCELLED: summary?.statusCounts?.['CANCELLED'] ?? (summary?.totalCancelled ?? 0),
+    };
+  }, [summary]);
 
   const curlExample = `curl -X POST http://localhost:8080/api/v1/notifications \\
   -H "Authorization: Bearer ntf_your_api_key_here" \\
@@ -141,6 +166,28 @@ function OverviewContent() {
         timeRange={timeRange}
         onTimeRangeChange={setTimeRange}
       />
+
+      {/* Realtime Aggregate Pipeline Lifecycle */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Activity size={15} style={{ color: 'var(--color-signal)' }} />
+            <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--color-harbor)', letterSpacing: '-0.01em' }}>
+              Aggregate Pipeline Lifecycle
+            </h2>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--color-ink-2)' }}>
+            Select any lifecycle node to inspect filtered notifications
+          </span>
+        </div>
+
+        <LifecycleRail
+          status="QUEUED"
+          variant="aggregate"
+          aggregateCounts={aggregateCounts}
+          onClickStage={(stage) => navigate(`/app/notifications?status=${stage}`)}
+        />
+      </div>
 
       {/* Deliveries Over Time Chart Panel */}
       <ChartPanel

@@ -94,7 +94,7 @@ services:
       # / the email worker stays disabled unless explicitly enabled (). The fake provider is the default.
       # NOTIFY_RESEND_API_KEY is deliberately NOT interpolated here: scripts/gate.ps1 prints `docker compose config`,
       # which would expose a resolved key. Supply it at run time (for example `docker compose run -e NOTIFY_RESEND_API_KEY ...`).
-      NOTIFY_WORKER_EMAIL_ENABLED: ${NOTIFY_WORKER_EMAIL_ENABLED:-false}
+      NOTIFY_WORKER_EMAIL_ENABLED: ${NOTIFY_WORKER_EMAIL_ENABLED:-true}
       NOTIFY_EMAIL_PROVIDER: ${NOTIFY_EMAIL_PROVIDER:-fake}
       NOTIFY_MAIL_FROM: ${NOTIFY_MAIL_FROM:-notifications@example.com}
       # / the webhook worker stays disabled unless explicitly enabled (extended).
@@ -108,7 +108,8 @@ services:
       #   one-off: docker compose run -e NOTIFY_WEBHOOK_SECRET_KEY backend ...  (forwards it from the host environment)
       # Never pass the override file to a command whose output is shared. Without the key the webhook worker refuses
       # to start and the configuration API answers 503 FEATURE_NOT_YET_AVAILABLE.
-      NOTIFY_WORKER_WEBHOOK_ENABLED: ${NOTIFY_WORKER_WEBHOOK_ENABLED:-false}
+      NOTIFY_WORKER_WEBHOOK_ENABLED: ${NOTIFY_WORKER_WEBHOOK_ENABLED:-true}
+      NOTIFY_WORKER_INAPP_ENABLED: ${NOTIFY_WORKER_INAPP_ENABLED:-true}
       # / spans go to the obs-profile collector. The OTLP exporter fails open, so running the
       # app profile without the obs profile simply drops traces instead of affecting delivery.
       NOTIFY_OTLP_TRACES_ENDPOINT: ${NOTIFY_OTLP_TRACES_ENDPOINT:-http://otel-collector:4318/v1/traces}

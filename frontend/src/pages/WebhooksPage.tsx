@@ -5,6 +5,7 @@ import {
   updateWebhookEndpoint,
   testWebhookEndpoint,
   rotateWebhookSecret,
+  deleteWebhookEndpoint,
   type WebhookEndpoint,
   type WebhookTestResult,
 } from '../api/webhooks';
@@ -22,6 +23,7 @@ import {
   Radio,
   X,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 
 export default function WebhooksPage() {
@@ -51,6 +53,12 @@ export default function WebhooksPage() {
   const [showRotateConfirm, setShowRotateConfirm] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+
+  // Delete Endpoint Modal State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   // Collapsible Guide State
   const [guideOpen, setGuideOpen] = useState(false);
@@ -155,6 +163,25 @@ export default function WebhooksPage() {
       setRotateError(err.message || 'Failed to rotate secret');
     } finally {
       setRotating(false);
+    }
+  };
+
+  const handleDeleteEndpoint = async () => {
+    try {
+      setDeleting(true);
+      setDeleteError(null);
+      await deleteWebhookEndpoint();
+      setShowDeleteConfirm(false);
+      setEndpoint(null);
+      setUrl('');
+      setEnabled(true);
+      setTestResult(null);
+      setDeleteSuccess(true);
+      setTimeout(() => setDeleteSuccess(false), 4000);
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete webhook endpoint from database');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -298,65 +325,144 @@ func VerifySignature(payload []byte, headerSig string, secret []byte) bool {
           </div>
         )}
 
+        {deleteSuccess && (
+          <div
+            style={{
+              padding: '9px 13px',
+              backgroundColor: 'var(--color-st-delivered-bg)',
+              border: '1px solid var(--color-st-delivered)',
+              borderRadius: 'var(--radius-control)',
+              color: 'var(--color-st-delivered)',
+              fontSize: 12,
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <CheckCircle2 size={14} />
+            <span>Webhook endpoint was permanently deleted from the database.</span>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--color-ink-2)' }}>
             <div className="loading-spinner" style={{ margin: '0 auto 10px' }} />
             <span style={{ fontSize: 13 }}>Loading webhook configuration…</span>
           </div>
         ) : (
-          <form onSubmit={handleSave}>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', marginBottom: 6 }}>
-                Payload URL:
-              </label>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://api.yourdomain.com/webhooks/notify"
-                className="input-text mono"
-                style={{ fontSize: 12 }}
-              />
-              <span style={{ fontSize: 11, color: 'var(--color-ink-2)', marginTop: 4, display: 'block' }}>
-                Must be an accessible HTTPS endpoint. Non-routable internal IP ranges and link-local addresses are rejected by SSRF egress filters.
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 20 }}>
-              <input
-                type="checkbox"
-                id="webhook-enabled"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <label htmlFor="webhook-enabled" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', cursor: 'pointer' }}>
-                Enable outbound event deliveries to this endpoint
-              </label>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-              <button
-                type="button"
-                onClick={handleTestPing}
-                disabled={testing || !endpoint || isSuspended}
-                className="btn btn-secondary"
-                style={{ fontSize: 12 }}
+          <div>
+            {endpoint && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid var(--color-rail)',
+                  borderRadius: 'var(--radius-control)',
+                  marginBottom: 18,
+                }}
               >
-                <Send size={12} />
-                {testing ? 'Sending Ping…' : 'Send Test Ping'}
-              </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)' }}>
+                    Saved Database Destination:
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <span
+                      className={endpoint.enabled ? 'chip chip-delivered' : 'chip chip-failed'}
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                    >
+                      {endpoint.enabled ? 'Active / Enabled' : 'Disabled'}
+                    </span>
+                    {endpoint.isDemo && (
+                      <span className="chip chip-scheduled" style={{ fontSize: 11, padding: '2px 8px' }}>
+                        Demo Mode
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="mono" style={{ fontSize: 12, wordBreak: 'break-all', color: 'var(--color-signal)' }}>
+                  {endpoint.url}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-ink-3)', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span>Endpoint ID: <code className="mono">{endpoint.id}</code></span>
+                  <span>Updated: {new Date(endpoint.updatedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
 
-              <button
-                type="submit"
-                disabled={saving || isSuspended}
-                className="btn btn-primary"
-                style={{ fontSize: 12 }}
-              >
-                {saving ? 'Saving…' : 'Save Endpoint'}
-              </button>
-            </div>
-          </form>
+            <form onSubmit={handleSave}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', marginBottom: 6 }}>
+                  {endpoint ? 'Update Destination URL:' : 'Payload Destination URL:'}
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://api.yourdomain.com/webhooks/notify"
+                  className="input-text mono"
+                  style={{ fontSize: 12 }}
+                />
+                <span style={{ fontSize: 11, color: 'var(--color-ink-2)', marginTop: 4, display: 'block' }}>
+                  Must be an accessible HTTPS endpoint. Non-routable internal IP ranges and link-local addresses are rejected by SSRF egress filters.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 20 }}>
+                <input
+                  type="checkbox"
+                  id="webhook-enabled"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <label htmlFor="webhook-enabled" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-harbor)', cursor: 'pointer' }}>
+                  Enable outbound event deliveries to this endpoint
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={handleTestPing}
+                    disabled={testing || !endpoint || isSuspended}
+                    className="btn btn-secondary"
+                    style={{ fontSize: 12 }}
+                  >
+                    <Send size={12} />
+                    {testing ? 'Sending Ping…' : 'Send Test Ping'}
+                  </button>
+
+                  {endpoint && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setShowDeleteConfirm(true);
+                      }}
+                      disabled={deleting || isSuspended}
+                      className="btn btn-secondary"
+                      style={{ fontSize: 12, color: 'var(--color-st-failed)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                      title="Permanently delete endpoint from database"
+                    >
+                      <Trash2 size={12} />
+                      Delete Endpoint
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving || isSuspended}
+                  className="btn btn-primary"
+                  style={{ fontSize: 12 }}
+                >
+                  {saving ? 'Saving…' : 'Save Endpoint'}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
         {/* Test Ping Inline Result Card */}
@@ -584,6 +690,69 @@ func VerifySignature(payload []byte, headerSig string, secret []byte) bool {
                 className="btn btn-danger"
               >
                 {rotating ? 'Rotating…' : 'Rotate Secret'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay modal-backdrop">
+          <div className="modal-card" style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--color-st-failed)' }}>
+                Delete Webhook Endpoint Permanently?
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn btn-ghost"
+                style={{ padding: 4 }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: 'var(--color-ink-2)', lineHeight: 1.5, margin: 0 }}>
+                This will permanently delete your webhook endpoint configuration (<code className="mono">{endpoint?.url}</code>) and its encrypted HMAC signing secret from the Notify database.
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--color-st-retrying)', marginTop: 10, lineHeight: 1.5 }}>
+                ⚠️ Any outbound webhook dispatches will not be delivered until a new destination endpoint is configured.
+              </p>
+              {deleteError && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: '8px 12px',
+                    backgroundColor: 'var(--color-st-failed-bg)',
+                    border: '1px solid var(--color-st-failed)',
+                    borderRadius: 'var(--radius-control)',
+                    color: 'var(--color-st-failed)',
+                    fontSize: 12,
+                  }}
+                >
+                  {deleteError}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteEndpoint}
+                disabled={deleting}
+                className="btn btn-danger"
+              >
+                {deleting ? 'Deleting from DB…' : 'Delete Permanently'}
               </button>
             </div>
           </div>

@@ -90,4 +90,13 @@ public interface WebhookEndpointRepository extends JpaRepository<WebhookEndpoint
             @Param("secret") String secret,
             @Param("now") Instant now
     );
+
+    /**
+     * Permanently deletes the tenant's webhook endpoint from the database.
+     *
+     * @return 1 when deleted, 0 when the tenant had no endpoint
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM WebhookEndpointEntity e WHERE e.tenantId = :tenantId")
+    int deleteByTenantIdScoped(@Param("tenantId") UUID tenantId);
 }

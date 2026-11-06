@@ -22,4 +22,11 @@ notify:
   retry:
     base-delay: 30s
     max-delay: 15m
+  worker:
+    email:
+      enabled: ${NOTIFY_WORKER_EMAIL_ENABLED:true}
+    webhook:
+      enabled: ${NOTIFY_WORKER_WEBHOOK_ENABLED:true}
+    inapp:
+      enabled: ${NOTIFY_WORKER_INAPP_ENABLED:true}
 

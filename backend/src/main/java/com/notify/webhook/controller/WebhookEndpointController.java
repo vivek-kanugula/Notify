@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -100,6 +101,15 @@ public class WebhookEndpointController {
                 .map(view -> ResponseEntity.status(HttpStatus.CREATED)
                         .body(WebhookEndpointCreatedResponse.from(view, secret)))
                 .orElseThrow(() -> new NotifyException(ErrorCode.NOT_FOUND, "No webhook endpoint is configured"));
+    }
+
+    /** Permanently deletes the tenant's webhook endpoint from the database. */
+    @DeleteMapping
+    public ResponseEntity<Void> delete() {
+        TenantPrincipal principal = requireJwtPrincipal();
+        assertTenantWritable(principal.tenantId());
+        endpointService.delete(principal.tenantId());
+        return ResponseEntity.noContent().build();
     }
 
     private TenantPrincipal requireJwtPrincipal() {

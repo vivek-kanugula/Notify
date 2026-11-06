@@ -42,7 +42,12 @@ public class UsageServiceImpl implements UsageService {
         long failed = 0;
         long cancelled = 0;
         long processing = 0;
+        Map<String, Long> statusCountsMap = new LinkedHashMap<>();
+        for (NotificationStatus s : NotificationStatus.values()) {
+            statusCountsMap.put(s.name(), 0L);
+        }
         for (StatusCount sc : statusCounts) {
+            statusCountsMap.put(sc.status().name(), sc.count());
             total += sc.count();
             switch (sc.status()) {
                 case DELIVERED -> delivered += sc.count();
@@ -69,7 +74,7 @@ public class UsageServiceImpl implements UsageService {
 
         return new UsageSummaryResponse(
                 tenantId, from, to, total, delivered, failed, cancelled, processing,
-                successRate(delivered, failed), byChannel);
+                successRate(delivered, failed), byChannel, statusCountsMap);
     }
 
     @Override

@@ -20,7 +20,23 @@ public record UsageSummaryResponse(
         long totalCancelled,
         long totalProcessing,
         double deliverySuccessRate,
-        Map<Channel, ChannelCounts> byChannel
+        Map<Channel, ChannelCounts> byChannel,
+        Map<String, Long> statusCounts
 ) {
+    public UsageSummaryResponse(
+            UUID tenantId,
+            Instant from,
+            Instant to,
+            long totalAccepted,
+            long totalDelivered,
+            long totalFailed,
+            long totalCancelled,
+            long totalProcessing,
+            double deliverySuccessRate,
+            Map<Channel, ChannelCounts> byChannel) {
+        this(tenantId, from, to, totalAccepted, totalDelivered, totalFailed, totalCancelled, totalProcessing,
+                deliverySuccessRate, byChannel, Map.of());
+    }
+
     public record ChannelCounts(long accepted, long delivered, long failed) {}
 }
