@@ -28,7 +28,7 @@ export default function LoginPage({ initialSignup = false }: { initialSignup?: b
     setError('');
 
     const trimmedEmail = email.trim();
-    if (!isGoogleEmail(trimmedEmail)) {
+    if (isSignup && !isGoogleEmail(trimmedEmail)) {
       setError('Email must be from Google domain (@gmail.com)');
       errorRef.current?.focus();
       return;
@@ -113,15 +113,15 @@ export default function LoginPage({ initialSignup = false }: { initialSignup?: b
           )}
 
           <div className="form-group">
-            <label htmlFor="email">Google Email (@gmail.com)</label>
+            <label htmlFor="email">{isSignup ? 'Google Email (@gmail.com)' : 'Email'}</label>
             <input
               id="email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="you@gmail.com"
-              pattern="^[a-zA-Z0-9._%+-]+@[gG][mM][aA][iI][lL]\.[cC][oO][mM]$"
-              title="Email must be a valid @gmail.com address"
+              placeholder={isSignup ? 'you@gmail.com' : 'you@example.com'}
+              pattern={isSignup ? "^[a-zA-Z0-9._%+-]+@[gG][mM][aA][iI][lL]\\.[cC][oO][mM]$" : undefined}
+              title={isSignup ? "Email must be a valid @gmail.com address" : undefined}
               required
               autoComplete="email"
             />

@@ -169,16 +169,34 @@ class TenantAuthEmailValidationTest {
     }
 
     @Test
-    @DisplayName("login with non-gmail email throws VALIDATION_FAILED when requireGmail is true")
-    void login_nonGmailRejected_whenEnforced() {
+    @DisplayName("login with existing non-gmail account succeeds even when requireGmail is true")
+    void login_existingNonGmailAllowed_whenEnforced() {
         LoginRequest request = new LoginRequest("user@outlook.com", "Password123!");
 
-        assertThatThrownBy(() -> serviceWithGmailEnforced.login(request, "agent", "127.0.0.1"))
-                .isInstanceOf(NotifyException.class)
-                .hasMessageContaining("Email must be a valid Google domain (@gmail.com)")
-                .satisfies(e -> assertThat(((NotifyException) e).getErrorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED));
+        when(loginThrottleService.isThrottled("user@outlook.com", "127.0.0.1")).thenReturn(false);
 
-        verifyNoInteractions(tenantUserRepository);
+        UUID tenantId = UUID.randomUUID();
+        TenantUserEntity user = new TenantUserEntity();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setPasswordHash("$2a$12$hashed");
+        user.setRole(Role.TENANT_OWNER);
+        when(tenantUserRepository.findByEmail("user@outlook.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("Password123!", "$2a$12$hashed")).thenReturn(true);
+
+        TenantEntity tenant = new TenantEntity("Acme Corp", "acme-corp");
+        tenant.setStatus(TenantStatus.ACTIVE);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+
+        when(jwtService.generateTenantToken(any(), any(), any()))
+                .thenReturn(new JwtService.TokenResult("legacy-login-token", "jti", java.time.Instant.now().plusSeconds(900)));
+        when(jwtService.getAccessTokenTtl()).thenReturn(Duration.ofSeconds(900));
+        when(refreshTokenService.createRefreshToken(any(), any(), any(), any()))
+                .thenReturn(new RefreshTokenService.RefreshResult(UUID.randomUUID(), "login-refresh", java.time.Instant.now().plusSeconds(604800), UUID.randomUUID()));
+
+        var result = serviceWithGmailEnforced.login(request, "agent", "127.0.0.1");
+        assertThat(result).isNotNull();
+        assertThat(result.authResponse().accessToken()).isEqualTo("legacy-login-token");
     }
 
     @Test

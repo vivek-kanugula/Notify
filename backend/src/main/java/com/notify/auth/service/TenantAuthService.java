@@ -154,12 +154,6 @@ public class TenantAuthService {
      */
     @Transactional
     public LoginResult login(LoginRequest request, String userAgent, String ipAddress) {
-        // Enforce Google email domain (@gmail.com) when enabled
-        if (requireGmail && !isGoogleEmail(request.email())) {
-            throw new NotifyException(ErrorCode.VALIDATION_FAILED,
-                    "Email must be a valid Google domain (@gmail.com)");
-        }
-
         // Check throttle
         if (loginThrottleService.isThrottled(request.email(), ipAddress)) {
             throw new NotifyException(ErrorCode.RATE_LIMITED, "Too many login attempts. Please try again later.");
