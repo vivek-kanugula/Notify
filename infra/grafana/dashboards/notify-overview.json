@@ -13,13 +13,39 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Notifications created (rate)",
+      "title": "Notifications created (rate / min)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (channel) (rate(notify_notifications_created_total[5m])) or (sum by (channel) (notify_notifications_created_total) * 0) or vector(0)", "legendFormat": "{{channel}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "sum by (channel) (rate(notify_notifications_created_total[5m]) * 60) or (sum by (channel) (notify_notifications_created_total) * 0) or vector(0)",
+          "legendFormat": "{{channel}}"
+        }
       ]
     },
     {
@@ -28,10 +54,40 @@
       "title": "Delivery success rate (5m)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percentunit", "noValue": "100%" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "100%",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.90 },
+              { "color": "green", "value": 0.98 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "(sum(rate(notify_delivery_attempts_total{result_status=\"SUCCESS\"}[5m])) / clamp_min(sum(rate(notify_delivery_attempts_total[5m])), 1)) or (sum(notify_delivery_attempts_total{result_status=\"SUCCESS\"}) / clamp_min(sum(notify_delivery_attempts_total), 1)) or vector(1)" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "(sum(rate(notify_delivery_attempts_total{result_status=\"SUCCESS\"}[5m])) / clamp_min(sum(rate(notify_delivery_attempts_total[5m])), 1)) or (sum(notify_delivery_attempts_total{result_status=\"SUCCESS\"}) / clamp_min(sum(notify_delivery_attempts_total), 1)) or vector(1)"
+        }
       ]
     },
     {
@@ -40,10 +96,36 @@
       "title": "Queue depth",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (status) (notify_queue_depth) or vector(0)", "legendFormat": "{{status}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "sum by (status) (notify_queue_depth) or vector(0)",
+          "legendFormat": "{{status}}"
+        }
       ]
     }
   ]

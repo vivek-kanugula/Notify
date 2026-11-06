@@ -13,13 +13,39 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Delivery attempts by result",
+      "title": "Delivery attempts (rate / min)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (channel, result_status) (rate(notify_delivery_attempts_total[5m])) or (sum by (channel, result_status) (notify_delivery_attempts_total) * 0) or vector(0)", "legendFormat": "{{channel}} {{result_status}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "sum by (channel, result_status) (rate(notify_delivery_attempts_total[5m]) * 60) or (sum by (channel, result_status) (notify_delivery_attempts_total) * 0) or vector(0)",
+          "legendFormat": "{{channel}} {{result_status}}"
+        }
       ]
     },
     {
@@ -28,10 +54,36 @@
       "title": "Provider latency p95 (s)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "s", "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "s",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(notify_delivery_duration_seconds_bucket[5m]))) or vector(0)", "legendFormat": "{{channel}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(notify_delivery_duration_seconds_bucket[5m]))) or vector(0)",
+          "legendFormat": "{{channel}}"
+        }
       ]
     },
     {
@@ -40,10 +92,36 @@
       "title": "Circuit breaker state",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "notify_resilience_circuitbreaker_state or vector(0)", "legendFormat": "{{name}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "notify_resilience_circuitbreaker_state or vector(0)",
+          "legendFormat": "{{name}}"
+        }
       ]
     }
   ]

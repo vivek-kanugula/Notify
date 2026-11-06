@@ -16,10 +16,35 @@
       "title": "JVM heap used",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "bytes", "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "axisBorderShow": false
+          },
+          "unit": "bytes",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) or vector(0)" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) or vector(0)"
+        }
       ]
     },
     {
@@ -28,22 +53,73 @@
       "title": "Hikari active connections",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "hikaricp_connections_active or vector(0)" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "hikaricp_connections_active or vector(0)"
+        }
       ]
     },
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Rate-limit throttled",
+      "title": "Rate-limit throttled (rate / min)",
       "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": { "noValue": "0" }, "overrides": [] },
-      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "axisBorderShow": false
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }
+      },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "notify-prometheus" }, "expr": "sum by (type) (rate(notify_ratelimit_throttled_total[5m])) or (sum by (type) (notify_ratelimit_throttled_total) * 0) or vector(0)", "legendFormat": "{{type}}" }
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "notify-prometheus" },
+          "expr": "sum by (type) (rate(notify_ratelimit_throttled_total[5m]) * 60) or (sum by (type) (notify_ratelimit_throttled_total) * 0) or vector(0)",
+          "legendFormat": "{{type}}"
+        }
       ]
     }
   ]
