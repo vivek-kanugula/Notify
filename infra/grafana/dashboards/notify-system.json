@@ -4,8 +4,9 @@
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
+  "refresh": "5s",
   "timezone": "",
-  "time": { "from": "now-6h", "to": "now" },
+  "time": { "from": "now-30m", "to": "now" },
   "templating": { "list": [] },
   "annotations": { "list": [] },
   "panels": [
